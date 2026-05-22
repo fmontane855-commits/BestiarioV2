@@ -169,6 +169,10 @@ let surrenderInFlightUserId = null;
 let selectedHandCardId = null;
 let pendingPlacementMode = null;
 let pendingAttack = null;
+let battleRealtimeListenerRef = null;
+let battleRealtimeListener = null;
+let battlePollingIntervalId = null;
+let lastRenderedBattleSnapshot = '';
 let battleHistoryByOpponent = {};
 const shownSurrenderVictoryBySessionId = new Set();
 const previousBattleStatusBySessionId = {};
@@ -1236,6 +1240,72 @@ function getBattleCardWithEffectiveStats(session, cardId) {
   };
 }
 
+
+function getBattleRenderSnapshot(session) {
+  const compactSlots = (session.fieldSlots || []).map((slot) => ({
+    id: slot.id,
+    ownerUid: slot.ownerUid,
+    cardId: slot.cardId || '',
+    faceDown: Boolean(slot.faceDown),
+  }));
+  const compactStates = Object.fromEntries(
+    Object.entries(session.playerStates || {}).map(([uid, state]) => [uid, {
+      hand: (state.hand || []).slice(0, 3),
+      deckSize: (state.deck || []).length,
+      discardSize: (state.discard || []).length,
+    }]),
+  );
+
+  return JSON.stringify({
+    id: session.id,
+    currentTurnUid: session.currentTurnUid || '',
+    pendingDefense: session.pendingDefense || null,
+    status: session.status || '',
+    slots: compactSlots,
+    states: compactStates,
+  });
+}
+
+function stopBattleRealtimeSync() {
+  if (battleRealtimeListenerRef && battleRealtimeListener) {
+    battleRealtimeListenerRef.off('value', battleRealtimeListener);
+  }
+  battleRealtimeListenerRef = null;
+  battleRealtimeListener = null;
+  if (battlePollingIntervalId) {
+    clearInterval(battlePollingIntervalId);
+    battlePollingIntervalId = null;
+  }
+}
+
+function startBattleRealtimeSync(sessionId) {
+  if (!sessionId || !currentUserId) return;
+  stopBattleRealtimeSync();
+
+  const sessionRef = battleSessionsRef.child(sessionId);
+  battleRealtimeListenerRef = sessionRef;
+  battleRealtimeListener = (snapshot) => {
+    const latest = snapshot.val();
+    if (!latest || latest.status !== 'active') return;
+    const snapshotKey = getBattleRenderSnapshot(latest);
+    if (snapshotKey === lastRenderedBattleSnapshot) return;
+    activeBattleSession = latest;
+    renderBattleArena();
+  };
+
+  sessionRef.on('value', battleRealtimeListener);
+  battlePollingIntervalId = window.setInterval(async () => {
+    if (battleArenaModal.classList.contains('hidden') || !activeBattleSession?.id) return;
+    const fallbackSnapshot = await sessionRef.once('value');
+    const fallback = fallbackSnapshot.val();
+    if (!fallback || fallback.status !== 'active') return;
+    const snapshotKey = getBattleRenderSnapshot(fallback);
+    if (snapshotKey === lastRenderedBattleSnapshot) return;
+    activeBattleSession = fallback;
+    renderBattleArena();
+  }, 3000);
+}
+
 function getActiveBattleOpponentUid() {
   if (!activeBattleSession || !currentUserId) return '';
   return (activeBattleSession.players || []).find((uid) => uid !== currentUserId) || '';
@@ -1244,6 +1314,7 @@ function getActiveBattleOpponentUid() {
 function renderBattleArena() {
   if (!activeBattleSession || !currentUserId) return;
   const session = activeBattleSession;
+  lastRenderedBattleSnapshot = getBattleRenderSnapshot(session);
   const currentTurnUid = session.currentTurnUid;
   const myTurn = currentTurnUid === currentUserId;
   const players = getBattlePlayers(session);
@@ -2500,6 +2571,7 @@ document.addEventListener('click', (event) => {
       activeBattleSession = existingBattle;
       battleArenaDismissed = false;
       renderBattleArena();
+      startBattleRealtimeSync(existingBattle.id);
       return;
     }
 
@@ -2620,6 +2692,7 @@ rejectChallengeButton.addEventListener('click', () => {
 battleArenaCloseButton.addEventListener('click', () => {
   battleArenaDismissed = true;
   battleArenaModal.classList.add('hidden');
+  stopBattleRealtimeSync();
 });
 
 battleArenaSurrenderButton?.addEventListener('click', () => {
@@ -2646,6 +2719,7 @@ battleSessionsRef.on('value', (snapshot) => {
     activeBattleSession = null;
     battleArenaDismissed = false;
     battleArenaModal.classList.add('hidden');
+    stopBattleRealtimeSync();
     renderOnlineUsers();
     renderDeckBuilder();
     return;
@@ -2666,8 +2740,10 @@ battleSessionsRef.on('value', (snapshot) => {
   if (!battleArenaDismissed || current.currentTurnUid === BOT_UID || current.pendingDefense) {
     battleArenaDismissed = false;
     renderBattleArena();
+    startBattleRealtimeSync(current.id);
   } else {
     battleArenaModal.classList.add('hidden');
+    stopBattleRealtimeSync();
   }
   const pendingDefenseData = current.pendingDefense;
   if (pendingDefenseData?.defenderUid === BOT_UID) {
@@ -2709,4 +2785,4 @@ battleSessionsRef.on('value', (snapshot) => {
 battleActionPlaceButton?.addEventListener('click', () => { pendingPlacementMode = 'faceup'; hideCardActionModal(); renderBattleArena(); });
 battleActionFaceDownButton?.addEventListener('click', () => { pendingPlacementMode = 'facedown'; hideCardActionModal(); renderBattleArena(); });
 battleActionCancelButton?.addEventListener('click', () => { selectedHandCardId = null; pendingPlacementMode = null; hideCardActionModal(); renderBattleArena(); });
-document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { battleArenaDismissed = true; battleArenaModal.classList.add('hidden'); hideCardActionModal(); } });
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { battleArenaDismissed = true; battleArenaModal.classList.add('hidden'); hideCardActionModal(); stopBattleRealtimeSync(); } });
