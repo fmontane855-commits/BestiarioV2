@@ -1087,6 +1087,7 @@ async function resolveAttack(session, attackerSlotId, targetSlotId, attackerAttr
   const attackerSlot = (session.fieldSlots || []).find((slot) => slot.id === attackerSlotId);
   const targetSlot = (session.fieldSlots || []).find((slot) => slot.id === targetSlotId);
   if (!attackerSlot || !targetSlot || !attackerSlot.cardId || !targetSlot.cardId) return;
+  const wasTargetFaceDown = Boolean(targetSlot.faceDown);
 
   const attackerCard = characters.find((entry) => entry.id === attackerSlot.cardId);
   const targetCard = characters.find((entry) => entry.id === targetSlot.cardId);
@@ -1113,7 +1114,14 @@ async function resolveAttack(session, attackerSlotId, targetSlotId, attackerAttr
   const attackerResultingValue = getStatValue(attackerCard, attackerAttribute) + attackerModifiers[attackerAttribute];
   statPenaltyMessage = ` ${attackerCard.name} pierde ${attackPenalty} puntos en ${attackerAttribute} por atacar y queda en ${Math.max(0, attackerResultingValue)} durante la batalla.`;
 
-  if (attackerValue < targetValue) {
+  if (wasTargetFaceDown && targetValue >= attackerValue) {
+    const defenseReduction = Math.floor(targetValue / 2);
+    attackerModifiers[attackerAttribute] = (Number.parseInt(attackerModifiers[attackerAttribute] ?? '0', 10) || 0) - defenseReduction;
+    updatedModifiers[attackerSlot.cardId] = attackerModifiers;
+    const reducedAttackValue = Math.max(0, getStatValue(attackerCard, attackerAttribute) + attackerModifiers[attackerAttribute]);
+    statPenaltyMessage += ` ${targetCard.name} se defendió exitosamente boca abajo y reduce ${attackerAttribute} de ${attackerCard.name} en ${defenseReduction} (${targetValue}/2). ${attackerAttribute} queda en ${reducedAttackValue} durante la batalla.`;
+    targetSurvived = true;
+  } else if (attackerValue < targetValue) {
     loserCardId = attackerSlot.cardId;
     destroyedCardIds.add(attackerSlot.cardId);
     targetSurvived = true;
