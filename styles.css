@@ -1515,8 +1515,34 @@ body::before {
 
 .battle-main-grid {
   display: grid;
+  grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
   grid-template-rows: 1fr 1fr 1fr;
   min-height: 0;
+}
+.battle-left-column {
+  grid-row: 1 / -1;
+  display: grid;
+  place-items: center;
+  border-right: 1px solid rgba(196, 152, 70, 0.35);
+  background: linear-gradient(160deg, rgba(27, 31, 38, 0.9), rgba(19, 22, 27, 0.94));
+}
+
+.battle-left-grid {
+  width: min(88%, 180px);
+  aspect-ratio: 1 / 1;
+  border: 1px solid rgba(196, 152, 70, 0.4);
+  border-radius: 12px;
+  padding: 0.4rem;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 0.4rem;
+}
+
+.battle-left-cell {
+  border-radius: 8px;
+  border: 1px dashed rgba(196, 152, 70, 0.4);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .battle-main-row {
@@ -1577,6 +1603,18 @@ body::before {
 .battle-side-middle {
   border: 1px dashed rgba(196, 152, 70, 0.25);
   border-radius: 10px;
+  padding: 0.7rem;
+  display: grid;
+  place-items: center;
+}
+
+.battle-preview-empty {
+  text-align: center;
+  opacity: 0.8;
+}
+
+.battle-preview-card {
+  width: min(100%, 280px);
 }
 .battle-slot,
 .battle-hand .character-card {
