@@ -1050,9 +1050,9 @@ function getBotPreferredAttack(session, botUid) {
 
   let bestPlay = null;
   botSlots.forEach((attackerSlot) => {
-    const availableAttributes = getAvailableAttackAttributesForCard(session, attackerSlot.cardId);
+    const availableAttributes = getAvailableAttackAttributesForCard(session, attackerSlot.cardId, attackerSlot.ownerUid);
     const bestAttribute = availableAttributes.reduce((best, attribute) => {
-      const value = getEffectiveStatValue(session, attackerSlot.cardId, attribute);
+      const value = getEffectiveStatValue(session, attackerSlot.cardId, attribute, attackerSlot.ownerUid);
       if (!best || value > best.value) {
         return { attribute, value };
       }
@@ -1066,7 +1066,7 @@ function getBotPreferredAttack(session, botUid) {
         if (targetSlot.faceDown) {
           return { targetSlot, defenderValue: null };
         }
-        const defenderValue = getEffectiveStatValue(session, targetSlot.cardId, bestAttribute.attribute);
+        const defenderValue = getEffectiveStatValue(session, targetSlot.cardId, bestAttribute.attribute, targetSlot.ownerUid);
         if (defenderValue < bestAttribute.value) {
           return { targetSlot, defenderValue };
         }
@@ -1122,6 +1122,7 @@ function selectBestTarget(availableCards, attackerAttributes = null) {
         targetEntry.session,
         targetEntry.slot.cardId,
         attributeEntry.attribute,
+        targetEntry.slot.ownerUid,
       );
       if (attributeEntry.value <= defenderValue) return best;
       const score = attributeEntry.value - defenderValue;
@@ -1161,10 +1162,10 @@ function botActionLogic(session, botUid) {
 
   let bestAttackPlan = null;
   botSlotsWithCard.forEach((attackerSlot) => {
-    const availableAttributes = getAvailableAttackAttributesForCard(session, attackerSlot.cardId)
+    const availableAttributes = getAvailableAttackAttributesForCard(session, attackerSlot.cardId, attackerSlot.ownerUid)
       .map((attribute) => ({
         attribute,
-        value: getEffectiveStatValue(session, attackerSlot.cardId, attribute),
+        value: getEffectiveStatValue(session, attackerSlot.cardId, attribute, attackerSlot.ownerUid),
       }))
       .sort((a, b) => b.value - a.value);
 
@@ -1226,18 +1227,23 @@ function getStatValue(character, attribute) {
   return Number.parseInt(character?.[attribute] ?? '0', 10) || 0;
 }
 
-function getEffectiveStatValue(session, cardId, attribute) {
+function getBattleCardKey(ownerUid, cardId) {
+  return `${ownerUid || 'unknown'}::${cardId || ''}`;
+}
+
+function getEffectiveStatValue(session, cardId, attribute, ownerUid = '') {
   const card = characters.find((entry) => entry.id === cardId);
   const baseValue = getStatValue(card, attribute);
   const battleModifiers = session?.battleModifiers || {};
-  const cardModifiers = battleModifiers[cardId] || {};
+  const cardKey = getBattleCardKey(ownerUid, cardId);
+  const cardModifiers = battleModifiers[cardKey] || {};
   const modifierValue = Number.parseInt(cardModifiers[attribute] ?? '0', 10) || 0;
   return Math.max(0, baseValue + modifierValue);
 }
 
-function getHighestAttributeForCard(session, cardId) {
+function getHighestAttributeForCard(session, cardId, ownerUid = '') {
   return battleAttributes.reduce((best, attribute) => {
-    const value = getEffectiveStatValue(session, cardId, attribute);
+    const value = getEffectiveStatValue(session, cardId, attribute, ownerUid);
     if (!best || value > best.value) {
       return { attribute, value };
     }
@@ -1245,26 +1251,28 @@ function getHighestAttributeForCard(session, cardId) {
   }, null)?.attribute || 'strength';
 }
 
-function getUsedAttackAttributesForCard(session, cardId) {
+function getUsedAttackAttributesForCard(session, cardId, ownerUid = '') {
   const cycleByCard = session?.attackAttributeCycleByCard || {};
-  const used = cycleByCard[cardId];
+  const cardKey = getBattleCardKey(ownerUid, cardId);
+  const used = cycleByCard[cardKey];
   return Array.isArray(used) ? used.filter((attribute) => battleAttributes.includes(attribute)) : [];
 }
 
-function getAvailableAttackAttributesForCard(session, cardId) {
-  const used = getUsedAttackAttributesForCard(session, cardId);
+function getAvailableAttackAttributesForCard(session, cardId, ownerUid = '') {
+  const used = getUsedAttackAttributesForCard(session, cardId, ownerUid);
   const available = battleAttributes.filter((attribute) => !used.includes(attribute));
   return available.length ? available : [...battleAttributes];
 }
 
-function getNextAttackAttributeCycleByCard(session, cardId, usedAttribute) {
+function getNextAttackAttributeCycleByCard(session, cardId, usedAttribute, ownerUid = '') {
   const currentCycle = { ...(session?.attackAttributeCycleByCard || {}) };
-  const used = getUsedAttackAttributesForCard(session, cardId);
+  const used = getUsedAttackAttributesForCard(session, cardId, ownerUid);
   if (!battleAttributes.includes(usedAttribute) || used.includes(usedAttribute)) {
     return currentCycle;
   }
   const nextUsed = [...used, usedAttribute];
-  currentCycle[cardId] = nextUsed.length >= battleAttributes.length ? [] : nextUsed;
+  const cardKey = getBattleCardKey(ownerUid, cardId);
+  currentCycle[cardKey] = nextUsed.length >= battleAttributes.length ? [] : nextUsed;
   return currentCycle;
 }
 
@@ -1280,14 +1288,14 @@ async function resolveAttack(session, attackerSlotId, targetSlotId, attackerAttr
   const attackerCard = characters.find((entry) => entry.id === attackerSlot.cardId);
   const targetCard = characters.find((entry) => entry.id === targetSlot.cardId);
   if (!attackerCard || !targetCard) return;
-  const availableAttackAttributes = getAvailableAttackAttributesForCard(session, attackerSlot.cardId);
+  const availableAttackAttributes = getAvailableAttackAttributesForCard(session, attackerSlot.cardId, attackerSlot.ownerUid);
   if (!availableAttackAttributes.includes(attackerAttribute)) {
     showBattleMessage(`No puedes repetir ${attackerAttribute.toUpperCase()} con ${attackerCard.name} hasta completar el ciclo de 4 atributos.`);
     return;
   }
 
-  const attackerValue = getEffectiveStatValue(session, attackerSlot.cardId, attackerAttribute);
-  const targetValue = getEffectiveStatValue(session, targetSlot.cardId, defenderAttribute);
+  const attackerValue = getEffectiveStatValue(session, attackerSlot.cardId, attackerAttribute, attackerSlot.ownerUid);
+  const targetValue = getEffectiveStatValue(session, targetSlot.cardId, defenderAttribute, targetSlot.ownerUid);
   const wasTargetFaceDown = Boolean(targetSlot.faceDown);
   const updatedSlots = [...session.fieldSlots];
   const defenderIndex = updatedSlots.findIndex((slot) => slot.id === targetSlotId);
@@ -1303,20 +1311,21 @@ async function resolveAttack(session, attackerSlotId, targetSlotId, attackerAttr
   let statPenaltyMessage = '';
   let attackerDestroyedByExhaustion = false;
   let targetSurvived = true;
-  const updatedAttributeCycleByCard = getNextAttackAttributeCycleByCard(session, attackerSlot.cardId, attackerAttribute);
+  const updatedAttributeCycleByCard = getNextAttackAttributeCycleByCard(session, attackerSlot.cardId, attackerAttribute, attackerSlot.ownerUid);
 
-  const attackerModifiers = { ...(updatedModifiers[attackerSlot.cardId] || {}) };
+  const attackerCardKey = getBattleCardKey(attackerSlot.ownerUid, attackerSlot.cardId);
+  const attackerModifiers = { ...(updatedModifiers[attackerCardKey] || {}) };
   const previousAttackPenalty = Number.parseInt(attackerModifiers[attackerAttribute] ?? '0', 10) || 0;
   const attackPenalty = 5;
   attackerModifiers[attackerAttribute] = previousAttackPenalty - attackPenalty;
-  updatedModifiers[attackerSlot.cardId] = attackerModifiers;
+  updatedModifiers[attackerCardKey] = attackerModifiers;
   const attackerResultingValue = getStatValue(attackerCard, attackerAttribute) + attackerModifiers[attackerAttribute];
   statPenaltyMessage = ` ${attackerCard.name} pierde ${attackPenalty} puntos en ${attackerAttribute} por atacar y queda en ${Math.max(0, attackerResultingValue)} durante la batalla.`;
 
   if (wasTargetFaceDown && targetValue >= attackerValue) {
     const defenseReduction = Math.floor(targetValue / 2);
     attackerModifiers[attackerAttribute] = (Number.parseInt(attackerModifiers[attackerAttribute] ?? '0', 10) || 0) - defenseReduction;
-    updatedModifiers[attackerSlot.cardId] = attackerModifiers;
+    updatedModifiers[attackerCardKey] = attackerModifiers;
     const reducedAttackValue = Math.max(0, getStatValue(attackerCard, attackerAttribute) + attackerModifiers[attackerAttribute]);
     statPenaltyMessage += ` ${targetCard.name} se defendió exitosamente boca abajo y reduce ${attackerAttribute} de ${attackerCard.name} en ${defenseReduction} (${targetValue}/2). ${attackerAttribute} queda en ${reducedAttackValue} durante la batalla.`;
     targetSurvived = true;
@@ -1386,15 +1395,15 @@ async function resolveAttack(session, attackerSlotId, targetSlotId, attackerAttr
 }
 
 
-function getBattleCardWithEffectiveStats(session, cardId) {
+function getBattleCardWithEffectiveStats(session, cardId, ownerUid = '') {
   const card = characters.find((entry) => entry.id === cardId);
   if (!card) return null;
   return {
     ...card,
-    strength: getEffectiveStatValue(session, cardId, 'strength') || 0,
-    intelligence: getEffectiveStatValue(session, cardId, 'intelligence') || 0,
-    magic: getEffectiveStatValue(session, cardId, 'magic') || 0,
-    speed: getEffectiveStatValue(session, cardId, 'speed') || 0,
+    strength: getEffectiveStatValue(session, cardId, 'strength', ownerUid) || 0,
+    intelligence: getEffectiveStatValue(session, cardId, 'intelligence', ownerUid) || 0,
+    magic: getEffectiveStatValue(session, cardId, 'magic', ownerUid) || 0,
+    speed: getEffectiveStatValue(session, cardId, 'speed', ownerUid) || 0,
   };
 }
 
@@ -1486,7 +1495,7 @@ function renderBattleArena() {
 
   battleTurnLabel.textContent = myTurn ? 'Es tu turno.' : 'Turno del contrincante.';
   const handCardsMarkup = myState.hand.slice(0, 3).map((cardId) => {
-    const card = getBattleCardWithEffectiveStats(session, cardId);
+    const card = getBattleCardWithEffectiveStats(session, cardId, currentUserId);
     const selectedClass = selectedHandCardId === cardId ? 'is-picked' : '';
     if (!card) return '';
     return renderSharedCharacterCard(card, {
@@ -1503,7 +1512,7 @@ function renderBattleArena() {
       .filter((slot) => slot.ownerUid === ownerUid)
       .slice(0, 5);
     const slotMarkup = slots.map((slot) => {
-      const card = slot.cardId ? getBattleCardWithEffectiveStats(session, slot.cardId) : null;
+      const card = slot.cardId ? getBattleCardWithEffectiveStats(session, slot.cardId, slot.ownerUid) : null;
       const hiddenForOpponent = slot.faceDown && !isPlayer;
       const obscuredForOwner = slot.faceDown && isPlayer;
       const canPlace = isPlayer && !slot.cardId && Boolean(selectedHandCardId) && Boolean(pendingPlacementMode);
@@ -1529,7 +1538,7 @@ function renderBattlePreviewCard() {
     battleSideMiddle.innerHTML = '<p class="battle-preview-empty">Haz click en una carta para verla aquí.</p>';
     return;
   }
-  const card = getBattleCardWithEffectiveStats(activeBattleSession, selectedBattlePreview.cardId);
+  const card = getBattleCardWithEffectiveStats(activeBattleSession, selectedBattlePreview.cardId, selectedBattlePreview.ownerUid || '');
   if (!card) {
     battleSideMiddle.innerHTML = '<p class="battle-preview-empty">Haz click en una carta para verla aquí.</p>';
     return;
@@ -2713,7 +2722,7 @@ document.addEventListener('click', (event) => {
 
   const handCard = event.target.closest('[data-battle-hand-id]');
   if (handCard) {
-    selectedBattlePreview = { cardId: handCard.dataset.battleHandId, hidden: false };
+    selectedBattlePreview = { cardId: handCard.dataset.battleHandId, hidden: false, ownerUid: currentUserId };
     renderBattlePreviewCard();
     showCardActionModal(handCard.dataset.battleHandId);
     return;
@@ -2779,12 +2788,12 @@ document.addEventListener('click', (event) => {
   if (!clickedSlot) return;
   if (clickedSlot.cardId) {
     const isOpponentFaceDown = clickedSlot.faceDown && clickedSlot.ownerUid !== currentUserId;
-    selectedBattlePreview = { cardId: clickedSlot.cardId, hidden: isOpponentFaceDown };
+    selectedBattlePreview = { cardId: clickedSlot.cardId, hidden: isOpponentFaceDown, ownerUid: clickedSlot.ownerUid };
     renderBattlePreviewCard();
   }
 
   if (pendingDefenseData?.defenderUid === currentUserId && pendingDefenseData?.targetSlotId === clickedSlot.id) {
-    const bestDefenseAttribute = clickedSlot.cardId ? getHighestAttributeForCard(session, clickedSlot.cardId) : null;
+    const bestDefenseAttribute = clickedSlot.cardId ? getHighestAttributeForCard(session, clickedSlot.cardId, clickedSlot.ownerUid) : null;
     if (bestDefenseAttribute) {
       resolveAttack(
         session,
@@ -2826,9 +2835,9 @@ document.addEventListener('click', (event) => {
       showBattleMessage('Las cartas boca abajo no pueden atacar ni voltearse manualmente.');
       return;
     }
-    const attackerCard = getBattleCardWithEffectiveStats(session, clickedSlot.cardId);
+    const attackerCard = getBattleCardWithEffectiveStats(session, clickedSlot.cardId, clickedSlot.ownerUid);
     if (!attackerCard) return;
-    const allowedAttributes = getAvailableAttackAttributesForCard(session, clickedSlot.cardId);
+    const allowedAttributes = getAvailableAttackAttributesForCard(session, clickedSlot.cardId, clickedSlot.ownerUid);
     openAttributePicker('attack', attackerCard, (selectedAttribute) => {
       pendingAttack = { attackerSlotId: clickedSlot.id, attribute: selectedAttribute };
       showBattleMessage('Atributo elegido. Ahora selecciona una carta del campo rival para atacarla.');
@@ -2846,7 +2855,7 @@ document.addEventListener('click', (event) => {
     return;
   }
 
-  const bestDefenseAttribute = getHighestAttributeForCard(session, clickedSlot.cardId);
+  const bestDefenseAttribute = getHighestAttributeForCard(session, clickedSlot.cardId, clickedSlot.ownerUid);
   resolveAttack(session, pendingAttack.attackerSlotId, clickedSlot.id, pendingAttack.attribute, bestDefenseAttribute).catch((error) => console.error('No se pudo resolver el ataque contra carta boca abajo:', error));
   pendingAttack = null;
 });
@@ -2926,7 +2935,7 @@ battleSessionsRef.on('value', (snapshot) => {
   if (pendingDefenseData?.defenderUid === BOT_UID) {
     const defenderSlot = (current.fieldSlots || []).find((slot) => slot.id === pendingDefenseData.targetSlotId);
     if (defenderSlot?.cardId) {
-      const bestDefenseAttribute = getHighestAttributeForCard(current, defenderSlot.cardId);
+      const bestDefenseAttribute = getHighestAttributeForCard(current, defenderSlot.cardId, defenderSlot.ownerUid);
       resolveAttack(
         current,
         pendingDefenseData.attackerSlotId,
@@ -2942,7 +2951,7 @@ battleSessionsRef.on('value', (snapshot) => {
   if (pendingDefenseData?.defenderUid === currentUserId) {
     const defenderSlot = (current.fieldSlots || []).find((slot) => slot.id === pendingDefenseData.targetSlotId);
     if (defenderSlot?.cardId) {
-      const bestDefenseAttribute = getHighestAttributeForCard(current, defenderSlot.cardId);
+      const bestDefenseAttribute = getHighestAttributeForCard(current, defenderSlot.cardId, defenderSlot.ownerUid);
       resolveAttack(
         current,
         pendingDefenseData.attackerSlotId,
