@@ -1111,6 +1111,10 @@ async function resolveAttack(session, attackerSlotId, targetSlotId, attackerAttr
   const attackerSlot = (session.fieldSlots || []).find((slot) => slot.id === attackerSlotId);
   const targetSlot = (session.fieldSlots || []).find((slot) => slot.id === targetSlotId);
   if (!attackerSlot || !targetSlot || !attackerSlot.cardId || !targetSlot.cardId) return;
+  if (attackerSlot.faceDown) {
+    showBattleMessage('Las cartas boca abajo no pueden iniciar un ataque.');
+    return;
+  }
 
   const attackerCard = characters.find((entry) => entry.id === attackerSlot.cardId);
   const targetCard = characters.find((entry) => entry.id === targetSlot.cardId);
@@ -1124,6 +1128,10 @@ async function resolveAttack(session, attackerSlotId, targetSlotId, attackerAttr
   const attackerValue = getEffectiveStatValue(session, attackerSlot.cardId, attackerAttribute);
   const targetValue = getEffectiveStatValue(session, targetSlot.cardId, defenderAttribute);
   const updatedSlots = [...session.fieldSlots];
+  const defenderIndex = updatedSlots.findIndex((slot) => slot.id === targetSlotId);
+  if (defenderIndex >= 0 && updatedSlots[defenderIndex].faceDown) {
+    updatedSlots[defenderIndex] = { ...updatedSlots[defenderIndex], faceDown: false };
+  }
   const updatedPlayerStates = { ...(session.playerStates || {}) };
   const updatedModifiers = { ...(session.battleModifiers || {}) };
   const players = getBattlePlayers(session);
@@ -1146,7 +1154,6 @@ async function resolveAttack(session, attackerSlotId, targetSlotId, attackerAttr
   if (attackerValue < targetValue) {
     loserCardId = attackerSlot.cardId;
     destroyedCardIds.add(attackerSlot.cardId);
-    targetSurvived = true;
     const attackerIndex = updatedSlots.findIndex((slot) => slot.id === attackerSlotId);
     if (attackerIndex >= 0) {
       updatedSlots[attackerIndex] = { ...updatedSlots[attackerIndex], cardId: '', faceDown: false };
@@ -1154,7 +1161,6 @@ async function resolveAttack(session, attackerSlotId, targetSlotId, attackerAttr
   } else if (targetValue < attackerValue) {
     loserCardId = targetSlot.cardId;
     destroyedCardIds.add(targetSlot.cardId);
-    targetSurvived = false;
     const loserIndex = updatedSlots.findIndex((slot) => slot.id === targetSlotId);
     updatedSlots[loserIndex] = { ...updatedSlots[loserIndex], cardId: '', faceDown: false };
   }
@@ -1169,13 +1175,6 @@ async function resolveAttack(session, attackerSlotId, targetSlotId, attackerAttr
       loserCardId = attackerSlot.cardId;
     }
     destroyedCardIds.add(attackerSlot.cardId);
-  }
-
-  if (targetSurvived) {
-    const defenderIndex = updatedSlots.findIndex((slot) => slot.id === targetSlotId);
-    if (defenderIndex >= 0 && updatedSlots[defenderIndex].faceDown) {
-      updatedSlots[defenderIndex] = { ...updatedSlots[defenderIndex], faceDown: false };
-    }
   }
 
   if (!loserCardId) {
@@ -2560,6 +2559,10 @@ document.addEventListener('click', (event) => {
   }
 
   if (clickedSlot.ownerUid === currentUserId) {
+    if (clickedSlot.faceDown) {
+      showBattleMessage('Las cartas boca abajo no pueden atacar ni voltearse manualmente.');
+      return;
+    }
     const attackerCard = getBattleCardWithEffectiveStats(session, clickedSlot.cardId);
     if (!attackerCard) return;
     const allowedAttributes = getAvailableAttackAttributesForCard(session, clickedSlot.cardId);
