@@ -130,21 +130,68 @@ const characterTypes = [
   { type: 'Hijos del Vacío', clans: ['Eclipse Negro', 'La Nada Viva', 'Estrellas Muertas', 'Fin del Cosmos'] },
 ];
 
-const typeColorPalette = [
-  '#8e44ad', '#8b0000', '#b7c7d9', '#d35400', '#f1c40f',
-  '#7f8c8d', '#4b0082', '#c0392b', '#00a8cc', '#c0c0c0',
-  '#2ecc71', '#a0522d', '#dfe6e9', '#2c3e50', '#f39c12',
-  '#111111', '#3498db', '#16a085', '#6c7a89', '#34495e',
-  '#27ae60', '#7fbf3f', '#f5b041', '#5d6d7e', '#9b59b6',
-  '#d6a2e8', '#1f618d', '#95a5a6', '#00bcd4', '#e056fd',
-  '#e74c3c', '#2d3436', '#6c5ce7', '#8e5a2a', '#e84393',
-  '#c2b280', '#48c9b0', '#2f3640', '#6ab04c', '#f6b93b',
-  '#e67e22', '#00cec9', '#7f8fa6', '#7b241c', '#145a32',
-  '#ecf0f1', '#ff7675', '#ffd700', '#e17055', '#000814',
-];
+const typeColorGroups = {
+  red: ['#ff4d4d', '#e53935', '#c62828', '#8e0000'],
+  blue: ['#64b5f6', '#1e88e5'],
+  green: ['#2ecc71'],
+  white: ['#ffffff', '#ecf0f1'],
+  yellow: ['#ffe066', '#f1c40f', '#d4ac0d', '#b7950b'],
+  black: ['#111111'],
+  orange: ['#ffb347', '#ff9800', '#f57c00', '#d35400', '#b85c00', '#a04000', '#8e3200', '#6e2600'],
+  sky: ['#b3ecff', '#7ad8ff', '#42c7ff'],
+  violet: ['#d2a8ff', '#b57fe8', '#9b59b6', '#7d3c98', '#5b2c6f', '#4a235a'],
+  pink: ['#ff8ad6'],
+};
 
+const preferredTypeTones = {
+  Vampiros: typeColorGroups.red[0],
+  Espíritus: typeColorGroups.red[1],
+  Demonios: typeColorGroups.red[2],
+  Revenants: typeColorGroups.red[3],
+
+  Brujas: typeColorGroups.blue[0],
+  Magos: typeColorGroups.blue[1],
+
+  Titanes: typeColorGroups.green[0],
+
+  Ángeles: typeColorGroups.white[0],
+  'Dioses Antiguos': typeColorGroups.white[1],
+  Serafines: typeColorGroups.white[1],
+
+  Licántropos: typeColorGroups.yellow[0],
+  Dragones: typeColorGroups.yellow[1],
+  Mutantes: typeColorGroups.yellow[2],
+  'Bestias Mutantes': typeColorGroups.yellow[3],
+  Quimeras: typeColorGroups.yellow[1],
+
+  'Brujos del Tiempo': typeColorGroups.black[0],
+
+  Samuráis: typeColorGroups.orange[0],
+  Asesinos: typeColorGroups.orange[1],
+  Gladiadores: typeColorGroups.orange[2],
+  Paladines: typeColorGroups.orange[3],
+  Ninjas: typeColorGroups.orange[4],
+  Piratas: typeColorGroups.orange[5],
+  Cazadores: typeColorGroups.orange[6],
+  Monjes: typeColorGroups.orange[7],
+
+  Cyborgs: typeColorGroups.sky[0],
+  Androides: typeColorGroups.sky[1],
+  'Robots Bélicos': typeColorGroups.sky[2],
+
+  'Elfos Oscuros': typeColorGroups.violet[0],
+  Sirenas: typeColorGroups.violet[1],
+  Hadas: typeColorGroups.violet[2],
+  Orcos: typeColorGroups.violet[3],
+  Elementales: typeColorGroups.violet[4],
+  Goblins: typeColorGroups.violet[5],
+
+  Djinns: typeColorGroups.pink[0],
+};
+
+const fallbackTypeColor = '#7f8c8d';
 const characterTypeColors = Object.fromEntries(
-  characterTypes.map((entry, index) => [entry.type, typeColorPalette[index]]),
+  characterTypes.map((entry) => [entry.type, preferredTypeTones[entry.type] || fallbackTypeColor]),
 );
 
 const storageKey = 'cronicas-personajes';
