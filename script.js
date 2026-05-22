@@ -1146,7 +1146,7 @@ function selectBestTarget(availableCards, attackerAttributes = null) {
 function botActionLogic(session, botUid) {
   const botState = getPlayerState(session, botUid);
   const allBotSlots = (session.fieldSlots || []).filter((slot) => slot.ownerUid === botUid);
-  const botSlotsWithCard = allBotSlots.filter((slot) => slot.cardId);
+  const botSlotsWithCard = allBotSlots.filter((slot) => slot.cardId && !slot.faceDown);
   const rivalSlotsWithCard = (session.fieldSlots || []).filter((slot) => slot.ownerUid !== botUid && slot.cardId);
   const isFull = allBotSlots.length > 0 && allBotSlots.every((slot) => slot.cardId);
   const emptyBotSlot = allBotSlots.find((slot) => !slot.cardId) || null;
