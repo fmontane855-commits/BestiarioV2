@@ -997,7 +997,8 @@ function getBotPreferredAttack(session, botUid) {
 
   let bestPlay = null;
   botSlots.forEach((attackerSlot) => {
-    const bestAttribute = battleAttributes.reduce((best, attribute) => {
+    const availableAttributes = getAvailableAttackAttributesForCard(session, attackerSlot.cardId);
+    const bestAttribute = availableAttributes.reduce((best, attribute) => {
       const value = getEffectiveStatValue(session, attackerSlot.cardId, attribute);
       if (!best || value > best.value) {
         return { attribute, value };
@@ -1083,6 +1084,29 @@ function getHighestAttributeForCard(session, cardId) {
   }, null)?.attribute || 'strength';
 }
 
+function getUsedAttackAttributesForCard(session, cardId) {
+  const cycleByCard = session?.attackAttributeCycleByCard || {};
+  const used = cycleByCard[cardId];
+  return Array.isArray(used) ? used.filter((attribute) => battleAttributes.includes(attribute)) : [];
+}
+
+function getAvailableAttackAttributesForCard(session, cardId) {
+  const used = getUsedAttackAttributesForCard(session, cardId);
+  const available = battleAttributes.filter((attribute) => !used.includes(attribute));
+  return available.length ? available : [...battleAttributes];
+}
+
+function getNextAttackAttributeCycleByCard(session, cardId, usedAttribute) {
+  const currentCycle = { ...(session?.attackAttributeCycleByCard || {}) };
+  const used = getUsedAttackAttributesForCard(session, cardId);
+  if (!battleAttributes.includes(usedAttribute) || used.includes(usedAttribute)) {
+    return currentCycle;
+  }
+  const nextUsed = [...used, usedAttribute];
+  currentCycle[cardId] = nextUsed.length >= battleAttributes.length ? [] : nextUsed;
+  return currentCycle;
+}
+
 async function resolveAttack(session, attackerSlotId, targetSlotId, attackerAttribute, defenderAttribute = attackerAttribute) {
   const attackerSlot = (session.fieldSlots || []).find((slot) => slot.id === attackerSlotId);
   const targetSlot = (session.fieldSlots || []).find((slot) => slot.id === targetSlotId);
@@ -1091,6 +1115,11 @@ async function resolveAttack(session, attackerSlotId, targetSlotId, attackerAttr
   const attackerCard = characters.find((entry) => entry.id === attackerSlot.cardId);
   const targetCard = characters.find((entry) => entry.id === targetSlot.cardId);
   if (!attackerCard || !targetCard) return;
+  const availableAttackAttributes = getAvailableAttackAttributesForCard(session, attackerSlot.cardId);
+  if (!availableAttackAttributes.includes(attackerAttribute)) {
+    showBattleMessage(`No puedes repetir ${attackerAttribute.toUpperCase()} con ${attackerCard.name} hasta completar el ciclo de 4 atributos.`);
+    return;
+  }
 
   const attackerValue = getEffectiveStatValue(session, attackerSlot.cardId, attackerAttribute);
   const targetValue = getEffectiveStatValue(session, targetSlot.cardId, defenderAttribute);
@@ -1104,6 +1133,7 @@ async function resolveAttack(session, attackerSlotId, targetSlotId, attackerAttr
   let statPenaltyMessage = '';
   let attackerDestroyedByExhaustion = false;
   let targetSurvived = true;
+  const updatedAttributeCycleByCard = getNextAttackAttributeCycleByCard(session, attackerSlot.cardId, attackerAttribute);
 
   const attackerModifiers = { ...(updatedModifiers[attackerSlot.cardId] || {}) };
   const previousAttackPenalty = Number.parseInt(attackerModifiers[attackerAttribute] ?? '0', 10) || 0;
@@ -1152,6 +1182,7 @@ async function resolveAttack(session, attackerSlotId, targetSlotId, attackerAttr
     await battleSessionsRef.child(session.id).update({
       fieldSlots: updatedSlots,
       battleModifiers: updatedModifiers,
+      attackAttributeCycleByCard: updatedAttributeCycleByCard,
       currentTurnUid: nextTurnUid,
       pendingDefense: null,
       updatedAt: getTimestamp(),
@@ -1176,6 +1207,7 @@ async function resolveAttack(session, attackerSlotId, targetSlotId, attackerAttr
     fieldSlots: updatedSlots,
     playerStates: updatedPlayerStates,
     battleModifiers: updatedModifiers,
+    attackAttributeCycleByCard: updatedAttributeCycleByCard,
     currentTurnUid: nextTurnUid,
     pendingDefense: null,
     updatedAt: getTimestamp(),
@@ -2389,10 +2421,11 @@ const battleAttributes = ['magic', 'strength', 'intelligence', 'speed'];
 let pendingAttributePick = null;
 let isRespondingToChallenge = false;
 
-function openAttributePicker(mode, card, onPick) {
+function openAttributePicker(mode, card, onPick, options = {}) {
   pendingAttributePick = { mode, onPick };
+  const attributes = (options.allowedAttributes || battleAttributes).filter((attribute) => battleAttributes.includes(attribute));
   battleAttackText.textContent = mode === 'defense' ? `Elige atributo para defender con ${card.name}.` : `Elige atributo para atacar con ${card.name}.`;
-  battleAttackOptions.innerHTML = battleAttributes.map((attribute) => (
+  battleAttackOptions.innerHTML = attributes.map((attribute) => (
     `<button class="save-character-btn battle-attribute-btn" data-battle-attribute="${attribute}" type="button">${attribute.toUpperCase()} (${escapeHtml(card[attribute])})</button>`
   )).join('');
   battleAttackModal.classList.remove('hidden');
@@ -2529,10 +2562,11 @@ document.addEventListener('click', (event) => {
   if (clickedSlot.ownerUid === currentUserId) {
     const attackerCard = getBattleCardWithEffectiveStats(session, clickedSlot.cardId);
     if (!attackerCard) return;
+    const allowedAttributes = getAvailableAttackAttributesForCard(session, clickedSlot.cardId);
     openAttributePicker('attack', attackerCard, (selectedAttribute) => {
       pendingAttack = { attackerSlotId: clickedSlot.id, attribute: selectedAttribute };
       showBattleMessage('Atributo elegido. Ahora selecciona una carta del campo rival para atacarla.');
-    });
+    }, { allowedAttributes });
     return;
   }
 
