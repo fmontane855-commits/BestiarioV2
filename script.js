@@ -56,6 +56,7 @@ const battleArenaModal = document.querySelector('#battle-arena-modal');
 const battleArenaCloseButton = document.querySelector('#battle-arena-close-btn');
 const battleArenaSurrenderButton = document.querySelector('#battle-arena-surrender-btn');
 const battleTurnLabel = document.querySelector('#battle-turn-label');
+const battleSideMiddle = document.querySelector('.battle-side-middle');
 const battleHand = document.querySelector('#battle-hand');
 const battleOpponentSlots = document.querySelector('#battle-opponent-slots');
 const battlePlayerSlots = document.querySelector('#battle-player-slots');
@@ -216,6 +217,7 @@ let surrenderInFlightUserId = null;
 let selectedHandCardId = null;
 let pendingPlacementMode = null;
 let pendingAttack = null;
+let selectedBattlePreview = null;
 let battleRealtimeListenerRef = null;
 let battleRealtimeListener = null;
 let battlePollingIntervalId = null;
@@ -1361,6 +1363,7 @@ function getActiveBattleOpponentUid() {
 
 function renderBattleArena() {
   if (!activeBattleSession || !currentUserId) return;
+  const session = activeBattleSession;
   lastRenderedBattleSnapshot = getBattleRenderSnapshot(session);
   const currentTurnUid = session.currentTurnUid;
   const myTurn = currentTurnUid === currentUserId;
@@ -1408,7 +1411,25 @@ function renderBattleArena() {
 
   renderSlots(opponentUid, battleOpponentSlots, false);
   renderSlots(currentUserId, battlePlayerSlots, true);
+  renderBattlePreviewCard();
   battleArenaModal.classList.remove('hidden');
+}
+
+function renderBattlePreviewCard() {
+  if (!battleSideMiddle) return;
+  if (!selectedBattlePreview || selectedBattlePreview.hidden) {
+    battleSideMiddle.innerHTML = '<p class="battle-preview-empty">Haz click en una carta para verla aquí.</p>';
+    return;
+  }
+  const card = getBattleCardWithEffectiveStats(activeBattleSession, selectedBattlePreview.cardId);
+  if (!card) {
+    battleSideMiddle.innerHTML = '<p class="battle-preview-empty">Haz click en una carta para verla aquí.</p>';
+    return;
+  }
+  battleSideMiddle.innerHTML = renderSharedCharacterCard(card, {
+    extraClasses: 'battle-preview-card battle-vertical-card',
+    staticCard: true,
+  });
 }
 
 function renderBattleCharacterCard(card, { hidden = false, obscured = false } = {}) {
@@ -2602,6 +2623,8 @@ document.addEventListener('click', (event) => {
 
   const handCard = event.target.closest('[data-battle-hand-id]');
   if (handCard) {
+    selectedBattlePreview = { cardId: handCard.dataset.battleHandId, hidden: false };
+    renderBattlePreviewCard();
     showCardActionModal(handCard.dataset.battleHandId);
     return;
   }
@@ -2664,6 +2687,11 @@ document.addEventListener('click', (event) => {
 
   const clickedSlot = (session.fieldSlots || []).find((slot) => slot.id === slotId);
   if (!clickedSlot) return;
+  if (clickedSlot.cardId) {
+    const isOpponentFaceDown = clickedSlot.faceDown && clickedSlot.ownerUid !== currentUserId;
+    selectedBattlePreview = { cardId: clickedSlot.cardId, hidden: isOpponentFaceDown };
+    renderBattlePreviewCard();
+  }
 
   if (pendingDefenseData?.defenderUid === currentUserId && pendingDefenseData?.targetSlotId === clickedSlot.id) {
     const defenderCard = clickedSlot.cardId ? getBattleCardWithEffectiveStats(session, clickedSlot.cardId) : null;
@@ -2759,6 +2787,7 @@ rejectChallengeButton.addEventListener('click', () => {
 
 battleArenaCloseButton.addEventListener('click', () => {
   battleArenaDismissed = true;
+  selectedBattlePreview = null;
   battleArenaModal.classList.add('hidden');
   stopBattleRealtimeSync();
 });
@@ -2785,6 +2814,7 @@ battleSessionsRef.on('value', (snapshot) => {
   const current = Object.values(sessions).find((session) => (session.players || []).includes(currentUserId) && session.status === 'active');
   if (!current) {
     activeBattleSession = null;
+    selectedBattlePreview = null;
     battleArenaDismissed = false;
     battleArenaModal.classList.add('hidden');
     stopBattleRealtimeSync();
