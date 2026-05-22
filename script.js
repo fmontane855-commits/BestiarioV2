@@ -1314,7 +1314,6 @@ function getActiveBattleOpponentUid() {
 
 function renderBattleArena() {
   if (!activeBattleSession || !currentUserId) return;
-  const session = activeBattleSession;
   lastRenderedBattleSnapshot = getBattleRenderSnapshot(session);
   const currentTurnUid = session.currentTurnUid;
   const myTurn = currentTurnUid === currentUserId;
@@ -2607,12 +2606,33 @@ document.addEventListener('click', (event) => {
 
   const targetSlot = event.target.closest('[data-battle-slot-id]');
   if (!targetSlot || !activeBattleSession || !currentUserId) return;
-  if (activeBattleSession.currentTurnUid !== currentUserId) return;
 
   const slotId = targetSlot.dataset.battleSlotId;
   const session = activeBattleSession;
+  const pendingDefenseData = session.pendingDefense;
+  if (session.currentTurnUid !== currentUserId) {
+    const canPickDefenseFromSlot = pendingDefenseData?.defenderUid === currentUserId && pendingDefenseData?.targetSlotId === slotId;
+    if (!canPickDefenseFromSlot) return;
+  }
+
   const clickedSlot = (session.fieldSlots || []).find((slot) => slot.id === slotId);
   if (!clickedSlot) return;
+
+  if (pendingDefenseData?.defenderUid === currentUserId && pendingDefenseData?.targetSlotId === clickedSlot.id) {
+    const defenderCard = clickedSlot.cardId ? getBattleCardWithEffectiveStats(session, clickedSlot.cardId) : null;
+    if (defenderCard) {
+      openAttributePicker('defense', defenderCard, (defenseAttribute) => {
+        resolveAttack(
+          session,
+          pendingDefenseData.attackerSlotId,
+          pendingDefenseData.targetSlotId,
+          pendingDefenseData.attackerAttribute,
+          defenseAttribute,
+        ).catch((error) => console.error('No se pudo resolver defensa:', error));
+      });
+    }
+    return;
+  }
 
   if (!clickedSlot.cardId) {
     if (!selectedHandCardId || !pendingPlacementMode) return;
