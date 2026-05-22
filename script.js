@@ -1361,6 +1361,7 @@ function getActiveBattleOpponentUid() {
 
 function renderBattleArena() {
   if (!activeBattleSession || !currentUserId) return;
+  const session = activeBattleSession;
   lastRenderedBattleSnapshot = getBattleRenderSnapshot(session);
   const currentTurnUid = session.currentTurnUid;
   const myTurn = currentTurnUid === currentUserId;
