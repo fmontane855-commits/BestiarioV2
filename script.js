@@ -1127,6 +1127,7 @@ async function resolveAttack(session, attackerSlotId, targetSlotId, attackerAttr
 
   const attackerValue = getEffectiveStatValue(session, attackerSlot.cardId, attackerAttribute);
   const targetValue = getEffectiveStatValue(session, targetSlot.cardId, defenderAttribute);
+  const wasTargetFaceDown = Boolean(targetSlot.faceDown);
   const updatedSlots = [...session.fieldSlots];
   const defenderIndex = updatedSlots.findIndex((slot) => slot.id === targetSlotId);
   if (defenderIndex >= 0 && updatedSlots[defenderIndex].faceDown) {
