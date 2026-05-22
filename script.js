@@ -1104,7 +1104,13 @@ function selectBestTarget(availableCards, attackerAttributes = null) {
   const isFaceUpTargetPool = faceUpCards.length > 0;
 
   if (!isFaceUpTargetPool) {
-    return targetPool[0] || null;
+    const hiddenTarget = targetPool[0] || null;
+    if (!hiddenTarget) return null;
+    return {
+      ...hiddenTarget,
+      attribute: attackerAttributes?.[0]?.attribute || battleAttributes[0],
+      score: 0,
+    };
   }
 
   let bestTarget = null;
