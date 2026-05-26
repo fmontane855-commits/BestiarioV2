@@ -2674,7 +2674,7 @@ function openCampoProfile(campoId) {
   const effectAttributes = Array.isArray(campo.effect?.attributes)
     ? campo.effect.attributes
     : (campo.effect?.attribute ? [campo.effect.attribute] : []);
-  window.alert(`${campo.name}\nEfecto: -50 en ${effectAttributes.join(', ') || 'atributo'}\nTipos: ${(campo.affectedTypes || []).join(', ') || 'Todos'}`);
+  window.alert(`${campo.name}\nEfecto: +50 en ${effectAttributes.join(', ') || 'atributo'}\nTipos: ${(campo.affectedTypes || []).join(', ') || 'Todos'}`);
 }
 
 function openCampoForm() {
@@ -2688,7 +2688,7 @@ function openCampoForm() {
         <label>URL de imagen<input name="imageUrl" type="url" placeholder="https://ejemplo.com/imagen.jpg"></label>
         <label>o Imagen desde Dispositivo<input name="imageFile" type="file" accept="image/*"></label>
         <fieldset>
-          <legend>Efecto: disminuye 50 por cada atributo seleccionado</legend>
+          <legend>Efecto: aumenta 50 por cada atributo seleccionado</legend>
           <label><input type="checkbox" name="effectAttributes" value="magic"> Magia</label>
           <label><input type="checkbox" name="effectAttributes" value="strength"> Fuerza</label>
           <label><input type="checkbox" name="effectAttributes" value="intelligence"> Inteligencia</label>
@@ -2728,7 +2728,7 @@ function openCampoForm() {
         speed: '0',
         story: 'Carta de campo',
         effect: {
-          operation: 'decrease',
+          operation: 'increase',
           value: 50,
           attributes: selectedEffectAttributes,
           attribute: selectedEffectAttributes[0] || '',
