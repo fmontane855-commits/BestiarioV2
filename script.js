@@ -1737,15 +1737,25 @@ async function executeBotTurn(session) {
 
     if (decision.action === 'attack') {
       const targetSlot = (session.fieldSlots || []).find((slot) => slot.id === decision.targetSlotId);
-      const defenderAttribute = targetSlot?.faceDown
-        ? battleAttributes[Math.floor(Math.random() * battleAttributes.length)]
-        : decision.attribute;
+      if (targetSlot?.faceDown) {
+        await battleSessionsRef.child(session.id).update({
+          pendingDefense: {
+            attackerSlotId: decision.attackerSlotId,
+            targetSlotId: decision.targetSlotId,
+            attackerAttribute: decision.attribute,
+            defenderUid: targetSlot.ownerUid,
+            createdAt: getTimestamp(),
+          },
+          updatedAt: getTimestamp(),
+        });
+        return;
+      }
       await resolveAttack(
         session,
         decision.attackerSlotId,
         decision.targetSlotId,
         decision.attribute,
-        defenderAttribute,
+        decision.attribute,
       );
       return;
     }
@@ -2715,7 +2725,7 @@ let pendingAttributePick = null;
 let isRespondingToChallenge = false;
 
 function openAttributePicker(mode, card, onPick, options = {}) {
-  pendingAttributePick = { mode, onPick };
+  pendingAttributePick = { mode, onPick, ...options };
   const attributes = (options.allowedAttributes || battleAttributes).filter((attribute) => battleAttributes.includes(attribute));
   battleAttackText.textContent = mode === 'defense' ? `Elige atributo para defender con ${card.name}.` : `Elige atributo para atacar con ${card.name}.`;
   battleAttackOptions.innerHTML = attributes.map((attribute) => (
@@ -2998,6 +3008,25 @@ battleSessionsRef.on('value', (snapshot) => {
     return;
   }
   if (pendingDefenseData?.defenderUid === currentUserId) {
+    const defenderSlot = (current.fieldSlots || []).find((slot) => slot.id === pendingDefenseData.targetSlotId);
+    const shouldPromptDefense = !pendingAttributePick
+      || pendingAttributePick.mode !== 'defense'
+      || pendingAttributePick.targetSlotId !== pendingDefenseData.targetSlotId
+      || pendingAttributePick.sessionId !== current.id;
+    if (shouldPromptDefense && defenderSlot?.cardId) {
+      const defenderCard = getBattleCardWithEffectiveStats(current, defenderSlot.cardId, defenderSlot.ownerUid);
+      if (defenderCard) {
+        openAttributePicker('defense', defenderCard, (selectedAttribute) => {
+          resolveAttack(
+            current,
+            pendingDefenseData.attackerSlotId,
+            pendingDefenseData.targetSlotId,
+            pendingDefenseData.attackerAttribute,
+            selectedAttribute,
+          ).catch((error) => console.error('No se pudo resolver defensa elegida:', error));
+        }, { targetSlotId: pendingDefenseData.targetSlotId, sessionId: current.id });
+      }
+    }
     renderOnlineUsers();
     renderDeckBuilder();
     return;
