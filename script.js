@@ -195,6 +195,64 @@ const characterTypeColors = Object.fromEntries(
   characterTypes.map((entry) => [entry.type, preferredTypeTones[entry.type] || fallbackTypeColor]),
 );
 
+
+
+const artifactTypes = ['Amuleto', 'Arma', 'Escudo', 'Armadura'];
+const artifactTargets = ['Propio', 'Especifico', 'Rival'];
+const artifactEffectKinds = ['Aumenta', 'Disminuye', 'Destruye', 'Revive'];
+let artifactFilePreview = '';
+let artifactEffects = [];
+
+function createEmptyArtifactEffect() {
+  return {
+    targetCharacter: 'Propio',
+    targetCharacters: [],
+    targetTypeMode: 'Propio',
+    targetTypes: [],
+    effectKind: 'Aumenta',
+    stats: { magic: '', strength: '', intelligence: '', speed: '' },
+    durationMode: 'turns',
+    turns: 1,
+  };
+}
+
+function getCurrentArtifacts() {
+  if (!currentUserId) return [];
+  return (users[currentUserId]?.artifacts || []);
+}
+
+function artifactEffectSummary(effect) {
+  const direction = effect.effectKind;
+  let statSummary = '';
+  if (direction === 'Aumenta' || direction === 'Disminuye') {
+    const stats = Object.entries(effect.stats).filter(([, v]) => Number(v) > 0).map(([k, v]) => `${direction === 'Aumenta' ? '+' : '-'}${v} en ${k}`);
+    statSummary = stats.length ? stats.join(', ') : `${direction.toLowerCase()} atributos`;
+  } else {
+    statSummary = direction;
+  }
+  const target = effect.targetTypeMode === 'Especifico' ? `a Tipos ${effect.targetTypes.join(', ') || 'específicos'}` : `a ${effect.targetTypeMode}`;
+  const duration = effect.durationMode === 'perpetuo' ? 'perpetuamente' : `durante ${effect.turns} turnos`;
+  return `${statSummary} ${target} ${duration}`;
+}
+
+function renderArtifactCard(artifact) {
+  const summary = (artifact.effects || []).length
+    ? artifact.effects.map(artifactEffectSummary).join(' · ')
+    : 'Sin efectos definidos';
+  return renderSharedCharacterCard({
+    id: artifact.id,
+    name: artifact.name,
+    type: artifact.type,
+    clan: 'Artefacto',
+    image: artifact.image,
+    strength: '-', speed: '-', magic: '-', intelligence: '-',
+  }, {
+    staticCard: true,
+    extraClasses: 'deck-card character-size-compact artifact-card',
+    customFooter: `<span class="artifact-rules">${escapeHtml(summary)}</span>`,
+  });
+}
+
 const storageKey = 'cronicas-personajes';
 const migrationKey = 'cronicas-personajes-firebase-migrated';
 const localCharacters = JSON.parse(localStorage.getItem(storageKey) || '[]');
@@ -480,6 +538,14 @@ function renderSharedCharacterCard(character, options = {}) {
   const interactiveAttributes = staticCard
     ? ''
     : `type="button" ${dataAttribute}="${safeDataValue}" aria-label="${escapeHtml(ariaLabel)}"`;
+  const footerContent = options.customFooter || `
+          <span class="stats-list" aria-label="Atributos de ${safeName}">
+            <span><strong>F</strong>: ${escapeHtml(character.strength)}</span>
+            <span><strong>V</strong>: ${escapeHtml(character.speed)}</span>
+            <span><strong>M</strong>: ${escapeHtml(character.magic)}</span>
+            <span><strong>I</strong>: ${escapeHtml(character.intelligence)}</span>
+          </span>
+  `;
 
   return `
     <${tagName} class="character-card character-gallery-card ${extraClasses} ${isInDevelopmentMode ? 'is-development-mode' : ''}" ${interactiveAttributes} style="${getTypeColorStyles(character.type)}${inlineStyle}">
@@ -492,12 +558,7 @@ function renderSharedCharacterCard(character, options = {}) {
             <span class="character-type-clan-tag">${escapeHtml(character.type)}</span>
             ${character.clan ? `<span class="character-type-clan-tag">${escapeHtml(character.clan)}</span>` : ''}
           </span>
-          <span class="stats-list" aria-label="Atributos de ${safeName}">
-            <span><strong>F</strong>: ${escapeHtml(character.strength)}</span>
-            <span><strong>V</strong>: ${escapeHtml(character.speed)}</span>
-            <span><strong>M</strong>: ${escapeHtml(character.magic)}</span>
-            <span><strong>I</strong>: ${escapeHtml(character.intelligence)}</span>
-          </span>
+          ${footerContent}
         </span>
       </span>
     </${tagName}>
@@ -586,6 +647,9 @@ function renderDeckBuilder() {
   }
 
   const editDeckBtn = document.querySelector('#edit-deck-btn');
+  const addArtifactBtn = document.querySelector('#add-artifact-btn');
+  if (addArtifactBtn) addArtifactBtn.addEventListener('click', openArtifactForm);
+
   if (editDeckBtn) {
     editDeckBtn.addEventListener('click', () => {
       if (!canEditDeck) return;
@@ -2061,6 +2125,14 @@ function renderProfile(character) {
         </form>`}
       </article>`).join('')}</div>` : '<p>Este personaje todavía no tiene acontecimientos.</p>'}
     </section>
+    <section class="artifact-section">
+      <div class="history-section-header">
+        <h3>Artefactos</h3>
+        <button id="add-artifact-btn" class="save-character-btn" type="button">Agregar Artefacto</button>
+      </div>
+      <div class="deck-grid">${getCurrentArtifacts().map(renderArtifactCard).join('') || '<p>No hay artefactos creados.</p>'}</div>
+      <div id="artifact-form-shell" class="hidden"></div>
+    </section>
   `;
 
   document.querySelector('.character-gallery').classList.add('hidden');
@@ -2242,6 +2314,46 @@ function updatePreview() {
 
   filePreviewImage.src = filePreview;
   filePreviewImage.classList.toggle('hidden', !filePreview);
+}
+
+
+function renderArtifactEffectsEditor() {
+  const list = document.querySelector('#artifact-effects-list');
+  if (!list) return;
+  list.innerHTML = artifactEffects.map((effect, index) => `
+    <article class="history-item selected">
+      <h4>Efecto ${index + 1}</h4>
+      <label>A quien afecta
+        <select data-effect-index="${index}" data-field="targetCharacter">${artifactTargets.map((v) => `<option value="${v}" ${effect.targetCharacter===v?'selected':''}>${v}</option>`).join('')}</select>
+      </label>
+      <label>Cómo lo afecta
+        <select data-effect-index="${index}" data-field="effectKind">${artifactEffectKinds.map((v) => `<option value="${v}" ${effect.effectKind===v?'selected':''}>${v}</option>`).join('')}</select>
+      </label>
+    </article>`).join('');
+}
+
+function openArtifactForm() {
+  const shell = document.querySelector('#artifact-form-shell');
+  if (!shell) return;
+  artifactEffects = [createEmptyArtifactEffect()];
+  shell.classList.remove('hidden');
+  shell.innerHTML = `<form id="artifact-form" class="character-form"><h3>Nuevo Artefacto</h3>
+    <label>Nombre del Artefacto<input name="name" required></label>
+    <label>Tipo de artefacto<select name="type">${artifactTypes.map((t)=>`<option value="${t}">${t}</option>`).join('')}</select></label>
+    <label>URL de imagen<input name="imageUrl" type="url"></label>
+    <label>O imagen desde dispositivo<input id="artifact-image-file" type="file" accept="image/*"></label>
+    <button id="add-artifact-effect-btn" type="button" class="save-character-btn">Agregar Efectos</button>
+    <section id="artifact-effects-list"></section>
+    <div class="form-actions"><button type="button" class="cancel-character-btn" id="cancel-artifact-btn">Cancelar</button><button class="save-character-btn" type="submit">Guardar Artefacto</button></div>
+  </form>`;
+  renderArtifactEffectsEditor();
+  shell.querySelector('#add-artifact-effect-btn').addEventListener('click',()=>{ artifactEffects.push(createEmptyArtifactEffect()); renderArtifactEffectsEditor(); });
+  shell.querySelector('#cancel-artifact-btn').addEventListener('click',()=>{ shell.classList.add('hidden'); shell.innerHTML=''; });
+  shell.querySelector('#artifact-effects-list').addEventListener('change',(event)=>{ const el=event.target.closest('[data-effect-index]'); if(!el) return; const i=Number(el.dataset.effectIndex); artifactEffects[i][el.dataset.field]=el.value; });
+  shell.querySelector('#artifact-image-file').addEventListener('change',(event)=>{ const [file]=event.target.files; if(!file){artifactFilePreview='';return;} const reader=new FileReader(); reader.onload=()=>{artifactFilePreview=reader.result;}; reader.readAsDataURL(file); });
+  shell.querySelector('#artifact-form').addEventListener('submit',async(event)=>{ event.preventDefault(); const fd=new FormData(event.currentTarget); const newArtifact={ id:crypto.randomUUID(), name:String(fd.get('name')||'').trim(), type:String(fd.get('type')||'Amuleto'), image:artifactFilePreview||String(fd.get('imageUrl')||''), effects:artifactEffects };
+    const userArtifacts=[...getCurrentArtifacts(), newArtifact]; await usersRef.child(currentUserId).update({ artifacts: userArtifacts }); shell.classList.add('hidden'); shell.innerHTML=''; renderDeckBuilder();
+  });
 }
 
 function resetForm() {
