@@ -14,6 +14,7 @@ const database = firebaseApp.database();
 const auth = firebase.auth();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 const charactersRef = database.ref('characters');
+const camposRef = database.ref('campos');
 const userDecksRef = database.ref('userDecks');
 const usersRef = database.ref('users');
 const onlineUsersRef = database.ref('onlineUsers');
@@ -204,6 +205,7 @@ const storageKey = 'cronicas-personajes';
 const migrationKey = 'cronicas-personajes-firebase-migrated';
 const localCharacters = JSON.parse(localStorage.getItem(storageKey) || '[]');
 let characters = [];
+let campos = [];
 let filePreview = '';
 let activeProfileId = null;
 let hasReceivedFirebaseData = false;
@@ -211,6 +213,7 @@ let currentUserId = null;
 let selectedDeckIds = [];
 let deckOrder = [];
 let savedDeck = { characterIds: [], mainIds: [] };
+let selectedCampoIds = [];
 let onlineUsers = {};
 let users = {};
 let activeChallenge = null;
@@ -543,8 +546,8 @@ function renderArtefactosGallery() {
 
 function renderCamposGallery() {
   if (!camposGallery) return;
-  camposGallery.innerHTML = characters.length
-    ? characters.map(renderCharacterCard).join('')
+  camposGallery.innerHTML = campos.length
+    ? campos.map(renderCharacterCard).join('')
     : '<p class="empty-gallery">Todavía no hay campos guardados.</p>';
 }
 
@@ -569,6 +572,7 @@ function renderDeckBuilder() {
     ? characters.filter((character) => savedDeck.characterIds.includes(character.id))
     : characters;
   const selectedSet = new Set(selectedDeckIds);
+  const selectedCamposSet = new Set(selectedCampoIds);
   const orderMap = new Map(deckOrder.map((id, index) => [id, index + 1]));
   const mainSet = new Set(savedDeck.mainIds);
 
@@ -584,6 +588,14 @@ function renderDeckBuilder() {
     </button>
     ${canEditDeck ? '' : '<p class="deck-lock-note">No puedes editar el mazo mientras haya batallas pendientes o en curso.</p>'}
     ${(!hasSavedDeck && selectedDeckIds.length === 20) ? '<button id="save-deck-btn" class="save-character-btn" type="button">Guardar Mazo</button>' : ''}
+    <p class="deck-description">Campos en mazo (opcional): ${selectedCampoIds.length}/3</p>
+    <section class="deck-grid">
+      ${campos.map((campo) => renderSharedCharacterCard(campo, {
+    dataAttribute: 'data-deck-campo-id',
+    extraClasses: `deck-card character-size-compact ${selectedCamposSet.has(campo.id) ? 'is-picked' : ''}`,
+    ariaLabel: `Seleccionar ${campo.name} para el mazo`,
+  })).join('')}
+    </section>
     <section class="deck-grid">
       ${availableCharacters.map((character) => {
     const isSelected = selectedSet.has(character.id);
@@ -612,6 +624,7 @@ function renderDeckBuilder() {
       if (!canEditDeck) return;
       savedDeck = { characterIds: [], mainIds: [] };
       selectedDeckIds = [];
+      selectedCampoIds = [];
       deckOrder = [];
       renderDeckBuilder();
     });
@@ -948,6 +961,7 @@ async function loadDeckForUser(userId) {
   if (!data) {
     savedDeck = { characterIds: [], mainIds: [] };
     selectedDeckIds = [];
+    selectedCampoIds = [];
     deckOrder = [];
     renderDeckBuilder();
     return;
@@ -958,13 +972,14 @@ async function loadDeckForUser(userId) {
     mainIds: Array.isArray(data.mainIds) ? data.mainIds : [],
   };
   selectedDeckIds = [...savedDeck.characterIds];
+  selectedCampoIds = Array.isArray(data.campoIds) ? data.campoIds.slice(0, 3) : [];
   deckOrder = [...savedDeck.characterIds];
   renderDeckBuilder();
 }
 
 async function saveDeck() {
   savedDeck = { characterIds: [...selectedDeckIds], mainIds: [] };
-  await userDecksRef.child(currentUserId).set(savedDeck);
+  await userDecksRef.child(currentUserId).set({ ...savedDeck, campoIds: [...selectedCampoIds] });
   setSyncStatus('Mazo guardado correctamente.', 'success');
   renderDeckBuilder();
 }
@@ -2476,6 +2491,78 @@ function normalizeHistoryTypes(rawData) {
   return seeded;
 }
 
+function openCampoProfile(campoId) {
+  const campo = campos.find((entry) => entry.id === campoId);
+  if (!campo) return;
+  window.alert(`${campo.name}\nEfecto: -50 en ${campo.effect?.attribute || 'atributo'}\nTipos: ${(campo.affectedTypes || []).join(', ') || 'Todos'}`);
+}
+
+function openCampoForm() {
+  const overlay = document.createElement('div');
+  overlay.className = 'challenge-modal';
+  overlay.innerHTML = `
+    <div class="challenge-modal-card">
+      <h3>Agregar Campos</h3>
+      <form class="character-form" id="campo-form">
+        <label>Nombre de Campo<input name="name" type="text" required></label>
+        <label>URL de imagen<input name="imageUrl" type="url" placeholder="https://ejemplo.com/imagen.jpg"></label>
+        <label>o Imagen desde Dispositivo<input name="imageFile" type="file" accept="image/*"></label>
+        <label>Efecto: disminuye +50 en atributo
+          <select name="effectAttribute" required>
+            <option value="">Selecciona un atributo</option>
+            <option value="magic">Magia</option>
+            <option value="strength">Fuerza</option>
+            <option value="intelligence">Inteligencia</option>
+            <option value="speed">Velocidad</option>
+          </select>
+        </label>
+        <label>Tipos afectados (acumulables, separados por coma)
+          <input name="affectedTypes" type="text" placeholder="Vampiros, Brujas, Dragones">
+        </label>
+        <div class="challenge-actions">
+          <button class="cancel-character-btn" data-close-campo type="button">Cancelar</button>
+          <button class="save-character-btn" type="submit">Guardar Campo</button>
+        </div>
+      </form>
+    </div>
+  `;
+  document.body.append(overlay);
+  overlay.querySelector('[data-close-campo]')?.addEventListener('click', () => overlay.remove());
+  overlay.querySelector('#campo-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const fieldId = crypto.randomUUID();
+    const saveCampo = async (imageValue) => {
+      await camposRef.child(fieldId).set({
+        id: fieldId,
+        name: String(formData.get('name') || '').trim(),
+        image: imageValue || String(formData.get('imageUrl') || '').trim(),
+        type: 'Campo',
+        clan: 'Campo',
+        magic: '0',
+        strength: '0',
+        intelligence: '0',
+        speed: '0',
+        story: 'Carta de campo',
+        effect: { operation: 'decrease', value: 50, attribute: String(formData.get('effectAttribute') || '') },
+        affectedTypes: String(formData.get('affectedTypes') || '').split(',').map((entry) => entry.trim()).filter(Boolean),
+      });
+    };
+    const file = formData.get('imageFile');
+    if (file && file.size) {
+      const reader = new FileReader();
+      reader.addEventListener('load', async () => {
+        await saveCampo(reader.result);
+        overlay.remove();
+      });
+      reader.readAsDataURL(file);
+    } else {
+      await saveCampo('');
+      overlay.remove();
+    }
+  });
+}
+
 function renderHistoryClans() {
   if (!historyClansList) return;
   if (!selectedHistoryTypeId) {
@@ -2562,6 +2649,7 @@ function toggleAuthenticatedUi(user) {
     currentUserId = null;
     savedDeck = { characterIds: [], mainIds: [] };
     selectedDeckIds = [];
+    selectedCampoIds = [];
     deckOrder = [];
     userName.textContent = '';
     userUid.textContent = '';
@@ -2634,7 +2722,7 @@ addArtefactButton?.addEventListener('click', () => {
 });
 
 addCampoButton?.addEventListener('click', () => {
-  alert('Próximamente podrás crear campos desde aquí.');
+  openCampoForm();
 });
 
 artefactosGallery?.addEventListener('click', (event) => {
@@ -2644,7 +2732,7 @@ artefactosGallery?.addEventListener('click', (event) => {
 
 camposGallery?.addEventListener('click', (event) => {
   const card = event.target.closest('.character-card');
-  if (card) openProfile(card.dataset.characterId);
+  if (card) openCampoProfile(card.dataset.characterId);
 });
 
 historyTypesList?.addEventListener('click', async (event) => {
@@ -2716,6 +2804,13 @@ setSyncStatus('Conectando con Firebase...', 'loading');
 onlineUsersRef.on('value', (snapshot) => {
   onlineUsers = snapshot.val() || {};
   renderOnlineUsers();
+});
+
+camposRef.on('value', (snapshot) => {
+  const data = snapshot.val() || {};
+  campos = Object.values(data).filter(Boolean);
+  renderCamposGallery();
+  renderDeckBuilder();
 });
 
 usersRef.on('value', (snapshot) => {
@@ -2835,6 +2930,19 @@ document.addEventListener('click', (event) => {
     } else if (selectedDeckIds.length < 20) {
       selectedDeckIds.push(characterId);
       deckOrder.push(characterId);
+    }
+    renderDeckBuilder();
+    return;
+  }
+
+  const campoDeckCard = event.target.closest('[data-deck-campo-id]');
+  if (campoDeckCard && currentUserId) {
+    const campoId = campoDeckCard.dataset.deckCampoId;
+    const isSelected = selectedCampoIds.includes(campoId);
+    if (isSelected) {
+      selectedCampoIds = selectedCampoIds.filter((id) => id !== campoId);
+    } else if (selectedCampoIds.length < 3) {
+      selectedCampoIds.push(campoId);
     }
     renderDeckBuilder();
     return;
