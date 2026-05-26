@@ -2606,7 +2606,9 @@ function normalizeHistoryTypes(rawData) {
 function openCampoProfile(campoId) {
   const campo = campos.find((entry) => entry.id === campoId);
   if (!campo) return;
-  window.alert(`${campo.name}\nEfecto: -50 en ${campo.effect?.attribute || 'atributo'}\nTipos: ${(campo.affectedTypes || []).join(', ') || 'Todos'}`);
+  const operation = campo.effect?.operation === 'increase' ? '+' : '-';
+  const effectValue = Number(campo.effect?.value) || 50;
+  window.alert(`${campo.name}\nEfecto: ${operation}${effectValue} en ${campo.effect?.attribute || 'atributo'}\nTipos: ${(campo.affectedTypes || []).join(', ') || 'Todos'}`);
 }
 
 function openCampoForm() {
@@ -2619,7 +2621,13 @@ function openCampoForm() {
         <label>Nombre de Campo<input name="name" type="text" required></label>
         <label>URL de imagen<input name="imageUrl" type="url" placeholder="https://ejemplo.com/imagen.jpg"></label>
         <label>o Imagen desde Dispositivo<input name="imageFile" type="file" accept="image/*"></label>
-        <label>Efecto: disminuye +50 en atributo
+        <label>Modificador
+          <select name="effectOperation" required>
+            <option value="increase">Aumenta +50</option>
+            <option value="decrease">Disminuye -50</option>
+          </select>
+        </label>
+        <label>Atributo afectado
           <select name="effectAttribute" required>
             <option value="">Selecciona un atributo</option>
             <option value="magic">Magia</option>
@@ -2656,7 +2664,11 @@ function openCampoForm() {
         intelligence: '0',
         speed: '0',
         story: 'Carta de campo',
-        effect: { operation: 'decrease', value: 50, attribute: String(formData.get('effectAttribute') || '') },
+        effect: {
+          operation: String(formData.get('effectOperation') || 'increase'),
+          value: 50,
+          attribute: String(formData.get('effectAttribute') || ''),
+        },
         affectedTypes: String(formData.get('affectedTypes') || '').split(',').map((entry) => entry.trim()).filter(Boolean),
       });
     };
