@@ -2793,16 +2793,19 @@ document.addEventListener('click', (event) => {
   }
 
   if (pendingDefenseData?.defenderUid === currentUserId && pendingDefenseData?.targetSlotId === clickedSlot.id) {
-    const bestDefenseAttribute = clickedSlot.cardId ? getHighestAttributeForCard(session, clickedSlot.cardId, clickedSlot.ownerUid) : null;
-    if (bestDefenseAttribute) {
+    const defenderCard = clickedSlot.cardId
+      ? getBattleCardWithEffectiveStats(session, clickedSlot.cardId, clickedSlot.ownerUid)
+      : null;
+    if (!defenderCard) return;
+    openAttributePicker('defense', defenderCard, (selectedAttribute) => {
       resolveAttack(
         session,
         pendingDefenseData.attackerSlotId,
         pendingDefenseData.targetSlotId,
         pendingDefenseData.attackerAttribute,
-        bestDefenseAttribute,
-      ).catch((error) => console.error('No se pudo resolver defensa automática:', error));
-    }
+        selectedAttribute,
+      ).catch((error) => console.error('No se pudo resolver defensa elegida:', error));
+    });
     return;
   }
 
@@ -2855,8 +2858,18 @@ document.addEventListener('click', (event) => {
     return;
   }
 
-  const bestDefenseAttribute = getHighestAttributeForCard(session, clickedSlot.cardId, clickedSlot.ownerUid);
-  resolveAttack(session, pendingAttack.attackerSlotId, clickedSlot.id, pendingAttack.attribute, bestDefenseAttribute).catch((error) => console.error('No se pudo resolver el ataque contra carta boca abajo:', error));
+  battleSessionsRef.child(session.id).update({
+    pendingDefense: {
+      attackerSlotId: pendingAttack.attackerSlotId,
+      targetSlotId: clickedSlot.id,
+      attackerAttribute: pendingAttack.attribute,
+      defenderUid: clickedSlot.ownerUid,
+      createdAt: getTimestamp(),
+    },
+    updatedAt: getTimestamp(),
+  }).then(() => {
+    showBattleMessage('Ataque lanzado contra carta boca abajo. El defensor debe elegir un atributo para defender.');
+  }).catch((error) => console.error('No se pudo iniciar la defensa de carta boca abajo:', error));
   pendingAttack = null;
 });
 
@@ -2949,17 +2962,9 @@ battleSessionsRef.on('value', (snapshot) => {
     return;
   }
   if (pendingDefenseData?.defenderUid === currentUserId) {
-    const defenderSlot = (current.fieldSlots || []).find((slot) => slot.id === pendingDefenseData.targetSlotId);
-    if (defenderSlot?.cardId) {
-      const bestDefenseAttribute = getHighestAttributeForCard(current, defenderSlot.cardId, defenderSlot.ownerUid);
-      resolveAttack(
-        current,
-        pendingDefenseData.attackerSlotId,
-        pendingDefenseData.targetSlotId,
-        pendingDefenseData.attackerAttribute,
-        bestDefenseAttribute,
-      ).catch((error) => console.error('No se pudo resolver defensa automática:', error));
-    }
+    renderOnlineUsers();
+    renderDeckBuilder();
+    return;
   }
   renderOnlineUsers();
   renderDeckBuilder();
