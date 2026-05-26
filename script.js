@@ -2167,7 +2167,7 @@ function renderProfile(character) {
         <button id="add-artifact-btn" class="save-character-btn" type="button">Agregar Artefacto</button>
       </div>
       <div class="deck-grid">${getCurrentArtifacts().map(renderArtifactCard).join('') || '<p>No hay artefactos creados.</p>'}</div>
-      <div id="artifact-form-shell" class="hidden"></div>
+      <div id="artifact-form-shell-deck" class="hidden"></div>
     </section>
   `;
 
@@ -2369,7 +2369,8 @@ function renderArtifactEffectsEditor() {
 }
 
 function openArtifactForm() {
-  const shell = document.querySelector('#artifact-form-shell');
+  const shell = document.querySelector('#artifact-form-shell-panel')
+    || document.querySelector('#artifact-form-shell-deck');
   if (!shell) return;
   artifactEffects = [createEmptyArtifactEffect()];
   shell.classList.remove('hidden');
