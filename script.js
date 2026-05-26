@@ -2606,9 +2606,10 @@ function normalizeHistoryTypes(rawData) {
 function openCampoProfile(campoId) {
   const campo = campos.find((entry) => entry.id === campoId);
   if (!campo) return;
-  const operation = campo.effect?.operation === 'increase' ? '+' : '-';
-  const effectValue = Number(campo.effect?.value) || 50;
-  window.alert(`${campo.name}\nEfecto: ${operation}${effectValue} en ${campo.effect?.attribute || 'atributo'}\nTipos: ${(campo.affectedTypes || []).join(', ') || 'Todos'}`);
+  const effectAttributes = Array.isArray(campo.effect?.attributes)
+    ? campo.effect.attributes
+    : (campo.effect?.attribute ? [campo.effect.attribute] : []);
+  window.alert(`${campo.name}\nEfecto: -50 en ${effectAttributes.join(', ') || 'atributo'}\nTipos: ${(campo.affectedTypes || []).join(', ') || 'Todos'}`);
 }
 
 function openCampoForm() {
@@ -2621,21 +2622,13 @@ function openCampoForm() {
         <label>Nombre de Campo<input name="name" type="text" required></label>
         <label>URL de imagen<input name="imageUrl" type="url" placeholder="https://ejemplo.com/imagen.jpg"></label>
         <label>o Imagen desde Dispositivo<input name="imageFile" type="file" accept="image/*"></label>
-        <label>Modificador
-          <select name="effectOperation" required>
-            <option value="increase">Aumenta +50</option>
-            <option value="decrease">Disminuye -50</option>
-          </select>
-        </label>
-        <label>Atributo afectado
-          <select name="effectAttribute" required>
-            <option value="">Selecciona un atributo</option>
-            <option value="magic">Magia</option>
-            <option value="strength">Fuerza</option>
-            <option value="intelligence">Inteligencia</option>
-            <option value="speed">Velocidad</option>
-          </select>
-        </label>
+        <fieldset>
+          <legend>Efecto: disminuye 50 por cada atributo seleccionado</legend>
+          <label><input type="checkbox" name="effectAttributes" value="magic"> Magia</label>
+          <label><input type="checkbox" name="effectAttributes" value="strength"> Fuerza</label>
+          <label><input type="checkbox" name="effectAttributes" value="intelligence"> Inteligencia</label>
+          <label><input type="checkbox" name="effectAttributes" value="speed"> Velocidad</label>
+        </fieldset>
         <label>Tipos afectados (acumulables, separados por coma)
           <input name="affectedTypes" type="text" placeholder="Vampiros, Brujas, Dragones">
         </label>
@@ -2652,6 +2645,11 @@ function openCampoForm() {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const fieldId = crypto.randomUUID();
+    const selectedEffectAttributes = formData.getAll('effectAttributes').map((entry) => String(entry).trim()).filter(Boolean);
+    if (!selectedEffectAttributes.length) {
+      window.alert('Debes seleccionar al menos un atributo para el efecto del campo.');
+      return;
+    }
     const saveCampo = async (imageValue) => {
       await camposRef.child(fieldId).set({
         id: fieldId,
@@ -2665,9 +2663,10 @@ function openCampoForm() {
         speed: '0',
         story: 'Carta de campo',
         effect: {
-          operation: String(formData.get('effectOperation') || 'increase'),
+          operation: 'decrease',
           value: 50,
-          attribute: String(formData.get('effectAttribute') || ''),
+          attributes: selectedEffectAttributes,
+          attribute: selectedEffectAttributes[0] || '',
         },
         affectedTypes: String(formData.get('affectedTypes') || '').split(',').map((entry) => entry.trim()).filter(Boolean),
       });
