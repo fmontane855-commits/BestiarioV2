@@ -83,6 +83,7 @@ const artefactosGallery = document.querySelector('#artefactos-gallery');
 const camposGallery = document.querySelector('#campos-gallery');
 const addArtefactButton = document.querySelector('#add-artefact-btn');
 const addCampoButton = document.querySelector('#add-campo-btn');
+const downloadAllButton = document.querySelector('#download-all-btn');
 
 const characterTypes = [
   { type: 'Brujas', clans: ['Luna Carmesí', 'Hijas del Caldero', 'Las Espinas Negras', 'Coven Eclipse'] },
@@ -373,6 +374,69 @@ function openHistoryTypeContextMenu(typeId, posX, posY) {
   placeMenu();
   historyTypeContextMenuState = { menu, typeId };
 }
+
+
+function getCharacterAttributePoints(character) {
+  return ['strength', 'speed', 'magic', 'intelligence'].reduce((total, attribute) => total + getCharacterStatValue(character, attribute), 0);
+}
+
+function buildDownloadPayload() {
+  const artifacts = getCurrentArtifacts();
+  return {
+    generatedAt: getTimestamp(),
+    generatedByUserId: currentUserId || null,
+    personajes: characters.map((character) => ({
+      foto: character.image || '',
+      nombre: character.name || '',
+      tipo: character.type || '',
+      puntosDeAtributo: {
+        total: getCharacterAttributePoints(character),
+        fuerza: getCharacterStatValue(character, 'strength'),
+        velocidad: getCharacterStatValue(character, 'speed'),
+        magia: getCharacterStatValue(character, 'magic'),
+        inteligencia: getCharacterStatValue(character, 'intelligence'),
+      },
+      historia: character.story || '',
+    })),
+    campos: campos.map((campo) => ({
+      foto: campo.image || '',
+      nombre: campo.name || '',
+      tipo: campo.type || '',
+      puntosDeAtributo: {
+        total: getCharacterAttributePoints(campo),
+        fuerza: getCharacterStatValue(campo, 'strength'),
+        velocidad: getCharacterStatValue(campo, 'speed'),
+        magia: getCharacterStatValue(campo, 'magic'),
+        inteligencia: getCharacterStatValue(campo, 'intelligence'),
+      },
+      historia: campo.story || '',
+    })),
+    artefactos: artifacts.map((artifact) => ({
+      foto: artifact.image || '',
+      nombre: artifact.name || '',
+      tipo: artifact.type || '',
+      puntosDeAtributo: artifact.effects || [],
+      historia: artifact.description || '',
+    })),
+  };
+}
+
+function downloadAllData() {
+  const payload = buildDownloadPayload();
+  const data = JSON.stringify(payload, null, 2);
+  const blob = new Blob([data], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  link.href = url;
+  link.download = `cronicas-del-reino-${stamp}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+downloadAllButton?.addEventListener('click', downloadAllData);
 
 buttons.forEach((button) => {
   button.addEventListener('click', () => {
