@@ -1530,7 +1530,7 @@ function renderBattleArena() {
       const card = slot.cardId ? getBattleCardWithEffectiveStats(session, slot.cardId, slot.ownerUid) : null;
       const hiddenForOpponent = slot.faceDown && !isPlayer;
       const obscuredForOwner = slot.faceDown && isPlayer;
-      const canPlace = isPlayer && !slot.cardId && Boolean(selectedHandCardId) && Boolean(pendingPlacementMode);
+      const canPlace = isPlayer && !slot.cardId && Boolean(selectedHandCardId) && Boolean(pendingPlacementMode) && shouldUseCardActionModal();
       const canInspect = Boolean(slot.cardId);
       const content = slot.cardId
         ? renderBattleCharacterCard(card, { hidden: hiddenForOpponent, obscured: obscuredForOwner })
@@ -1585,6 +1585,40 @@ function showCardActionModal(cardId) {
 
 function hideCardActionModal() {
   battleCardActionModal.classList.add('hidden');
+}
+
+function shouldUseCardActionModal() {
+  return window.matchMedia('(pointer: coarse)').matches;
+}
+
+async function placeHandCardInNextAvailableSlot(session, cardId, mode) {
+  if (!session || !currentUserId || !cardId) return;
+  const myState = getPlayerState(session, currentUserId);
+  if (!myState.hand.includes(cardId)) return;
+
+  const mySlots = (session.fieldSlots || []).filter((slot) => slot.ownerUid === currentUserId);
+  const emptySlot = mySlots.find((slot) => !slot.cardId);
+  if (!emptySlot) {
+    showBattleMessage('No tienes espacios vacíos para colocar cartas.');
+    return;
+  }
+
+  const faceDown = mode === 'facedown';
+  const fieldSlots = (session.fieldSlots || []).map((slot) => (slot.id === emptySlot.id ? { ...slot, cardId, faceDown } : slot));
+  const updatedState = refillHandFromDeck(
+    myState.hand.filter((id) => id !== cardId),
+    [...myState.deck],
+  );
+  const opponentUid = session.players.find((uid) => uid !== currentUserId);
+  await battleSessionsRef.child(session.id).update({
+    fieldSlots,
+    currentTurnUid: opponentUid,
+    [`playerStates/${currentUserId}/hand`]: updatedState.hand,
+    [`playerStates/${currentUserId}/deck`]: updatedState.deck,
+    updatedAt: getTimestamp(),
+  });
+  selectedHandCardId = null;
+  pendingPlacementMode = null;
 }
 
 function isDeckBattleReady(deckData) {
@@ -2737,9 +2771,16 @@ document.addEventListener('click', (event) => {
 
   const handCard = event.target.closest('[data-battle-hand-id]');
   if (handCard) {
+    if (!activeBattleSession || !currentUserId) return;
+    if (activeBattleSession.currentTurnUid !== currentUserId) return;
     selectedBattlePreview = { cardId: handCard.dataset.battleHandId, hidden: false, ownerUid: currentUserId };
     renderBattlePreviewCard();
-    showCardActionModal(handCard.dataset.battleHandId);
+    if (shouldUseCardActionModal()) {
+      showCardActionModal(handCard.dataset.battleHandId);
+    } else {
+      placeHandCardInNextAvailableSlot(activeBattleSession, handCard.dataset.battleHandId, 'faceup')
+        .catch((error) => console.error('No se pudo colocar la carta boca arriba:', error));
+    }
     return;
   }
 
@@ -2825,26 +2866,6 @@ document.addEventListener('click', (event) => {
   }
 
   if (!clickedSlot.cardId) {
-    if (!selectedHandCardId || !pendingPlacementMode) return;
-    if (clickedSlot.ownerUid !== currentUserId) return;
-    const myState = getPlayerState(session, currentUserId);
-    if (!myState.hand.includes(selectedHandCardId)) return;
-    const faceDown = pendingPlacementMode === 'facedown';
-    const fieldSlots = (session.fieldSlots || []).map((slot) => (slot.id === slotId ? { ...slot, cardId: selectedHandCardId, faceDown } : slot));
-    const updatedState = refillHandFromDeck(
-      myState.hand.filter((id) => id !== selectedHandCardId),
-      [...myState.deck],
-    );
-    const opponentUid = session.players.find((uid) => uid !== currentUserId);
-    battleSessionsRef.child(session.id).update({
-      fieldSlots,
-      currentTurnUid: opponentUid,
-      [`playerStates/${currentUserId}/hand`]: updatedState.hand,
-      [`playerStates/${currentUserId}/deck`]: updatedState.deck,
-      updatedAt: getTimestamp(),
-    });
-    selectedHandCardId = null;
-    pendingPlacementMode = null;
     return;
   }
 
@@ -2986,7 +3007,35 @@ battleSessionsRef.on('value', (snapshot) => {
 });
 
 
-battleActionPlaceButton?.addEventListener('click', () => { pendingPlacementMode = 'faceup'; hideCardActionModal(); renderBattleArena(); });
-battleActionFaceDownButton?.addEventListener('click', () => { pendingPlacementMode = 'facedown'; hideCardActionModal(); renderBattleArena(); });
+battleActionPlaceButton?.addEventListener('click', () => {
+  if (!activeBattleSession || !selectedHandCardId) return;
+  placeHandCardInNextAvailableSlot(activeBattleSession, selectedHandCardId, 'faceup')
+    .catch((error) => console.error('No se pudo colocar la carta boca arriba:', error))
+    .finally(() => {
+      hideCardActionModal();
+      renderBattleArena();
+    });
+});
+battleActionFaceDownButton?.addEventListener('click', () => {
+  if (!activeBattleSession || !selectedHandCardId) return;
+  placeHandCardInNextAvailableSlot(activeBattleSession, selectedHandCardId, 'facedown')
+    .catch((error) => console.error('No se pudo colocar la carta boca abajo:', error))
+    .finally(() => {
+      hideCardActionModal();
+      renderBattleArena();
+    });
+});
 battleActionCancelButton?.addEventListener('click', () => { selectedHandCardId = null; pendingPlacementMode = null; hideCardActionModal(); renderBattleArena(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { battleArenaDismissed = true; battleArenaModal.classList.add('hidden'); hideCardActionModal(); stopBattleRealtimeSync(); } });
+
+document.addEventListener('contextmenu', (event) => {
+  const handCard = event.target.closest('[data-battle-hand-id]');
+  if (!handCard || shouldUseCardActionModal()) return;
+  if (!activeBattleSession || !currentUserId) return;
+  if (activeBattleSession.currentTurnUid !== currentUserId) return;
+  event.preventDefault();
+  selectedBattlePreview = { cardId: handCard.dataset.battleHandId, hidden: false, ownerUid: currentUserId };
+  renderBattlePreviewCard();
+  placeHandCardInNextAvailableSlot(activeBattleSession, handCard.dataset.battleHandId, 'facedown')
+    .catch((error) => console.error('No se pudo colocar la carta boca abajo:', error));
+});
