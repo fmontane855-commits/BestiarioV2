@@ -30,6 +30,8 @@
         <h1 class="logo">Crónicas del Reino</h1>
         <nav class="menu">
           <button class="menu-btn active" data-target="personajes">Personajes</button>
+          <button class="menu-btn" data-target="artefactos">Artefactos</button>
+          <button class="menu-btn" data-target="campos">Campos</button>
           <button class="menu-btn" data-target="mazo">Mazo</button>
           <button class="menu-btn" data-target="batallas">Batallas</button>
           <button class="menu-btn" data-target="historial">Historial</button>
@@ -47,6 +49,20 @@
             </label>
             <button class="random-character-btn" type="button">Crear Aleatoriamente</button>
           </div>
+        </section>
+
+        <section id="artefactos" class="panel">
+          <div class="section-actions">
+            <button class="add-character-btn" id="add-artefact-btn" type="button">Agregar artefacto</button>
+          </div>
+          <section id="artefactos-gallery" class="character-gallery" aria-label="Galería de artefactos"></section>
+        </section>
+
+        <section id="campos" class="panel">
+          <div class="section-actions">
+            <button class="add-character-btn" id="add-campo-btn" type="button">Agregar campo</button>
+          </div>
+          <section id="campos-gallery" class="character-gallery" aria-label="Galería de campos"></section>
         </section>
 
         <section id="mazo" class="panel">
