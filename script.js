@@ -2830,7 +2830,7 @@ randomCharacterButton.addEventListener('click', createRandomCharacters);
 createCharacterForm();
 
 addArtefactButton?.addEventListener('click', () => {
-  alert('Próximamente podrás crear artefactos desde aquí.');
+  openArtifactForm();
 });
 
 addCampoButton?.addEventListener('click', () => {
