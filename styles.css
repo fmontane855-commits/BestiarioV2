@@ -425,6 +425,7 @@ body::before {
   --type-color-light: var(--gold-4);
   border: 1px solid color-mix(in srgb, var(--type-color) 74%, #ffffff 26%);
   border-radius: 12px;
+  position: relative;
   overflow: hidden;
   background:
     radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--type-color) 30%, transparent), transparent 52%),
@@ -440,6 +441,26 @@ body::before {
   grid-template-columns: 1fr 40%;
   min-height: 180px;
 }
+
+.character-xp-badge {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  z-index: 2;
+  min-width: 1.9rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.character-xp-badge.is-positive { background: rgba(46, 204, 113, 0.92); color: #092113; }
+.character-xp-badge.is-negative { background: rgba(231, 76, 60, 0.92); color: #fff4f2; }
+.character-xp-badge.is-neutral { background: rgba(243, 221, 176, 0.92); color: #2d210f; }
 
 .character-card-left {
   padding: 0.8rem;

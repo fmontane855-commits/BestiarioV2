@@ -503,8 +503,20 @@ function renderSharedCharacterCard(character, options = {}) {
   `;
 }
 
+function renderCharacterExperienceBadge(character) {
+  if (!currentUserId) return '';
+  const { positive, negative } = getCharacterExperience(character.id);
+  const balance = positive - negative;
+  const toneClass = balance > 0 ? 'is-positive' : balance < 0 ? 'is-negative' : 'is-neutral';
+  const sign = balance > 0 ? '+' : balance < 0 ? '-' : '±';
+  return `<span class="character-xp-badge ${toneClass}" title="Experiencia: +${positive} / -${negative}">${sign}${Math.abs(balance)}</span>`;
+}
+
 function renderCharacterCard(character) {
-  return renderSharedCharacterCard(character, { extraClasses: 'character-size-personajes' });
+  return renderSharedCharacterCard(character, {
+    extraClasses: 'character-size-personajes',
+    footerPrefix: renderCharacterExperienceBadge(character),
+  });
 }
 
 function renderGallery() {
