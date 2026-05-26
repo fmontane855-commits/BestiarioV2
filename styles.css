@@ -955,6 +955,8 @@ body::before {
 .challenge-modal-card {
   max-width: 420px;
   width: 100%;
+  max-height: min(92vh, 900px);
+  overflow: auto;
   border-radius: 14px;
   border: 1px solid rgba(224, 183, 98, 0.6);
   background: linear-gradient(160deg, rgba(53, 44, 33, 0.95), rgba(31, 25, 18, 0.95));
