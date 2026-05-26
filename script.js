@@ -223,6 +223,7 @@ let battleRealtimeListener = null;
 let battlePollingIntervalId = null;
 let lastRenderedBattleSnapshot = '';
 let battleHistoryByOpponent = {};
+let battleTurnTransitionTimeoutId = null;
 const shownSurrenderVictoryBySessionId = new Set();
 const previousBattleStatusBySessionId = {};
 let historyTypesData = {};
@@ -1471,6 +1472,22 @@ function startBattleRealtimeSync(sessionId) {
     if (!latest || latest.status !== 'active') return;
     const snapshotKey = getBattleRenderSnapshot(latest);
     if (snapshotKey === lastRenderedBattleSnapshot) return;
+
+    const previousTurnUid = activeBattleSession?.currentTurnUid || '';
+    const turnChanged = Boolean(previousTurnUid) && latest.currentTurnUid && previousTurnUid !== latest.currentTurnUid;
+
+    if (turnChanged) {
+      if (battleTurnTransitionTimeoutId) clearTimeout(battleTurnTransitionTimeoutId);
+      if (battleTurnLabel) battleTurnLabel.textContent = 'Resolviendo acciones y cambiando turno...';
+      battleTurnTransitionTimeoutId = window.setTimeout(() => {
+        activeBattleSession = latest;
+        renderBattleArena();
+        animateBattleTurnTransition();
+        battleTurnTransitionTimeoutId = null;
+      }, 550);
+      return;
+    }
+
     activeBattleSession = latest;
     renderBattleArena();
   };
@@ -1483,14 +1500,26 @@ function startBattleRealtimeSync(sessionId) {
     if (!fallback || fallback.status !== 'active') return;
     const snapshotKey = getBattleRenderSnapshot(fallback);
     if (snapshotKey === lastRenderedBattleSnapshot) return;
+    const previousTurnUid = activeBattleSession?.currentTurnUid || '';
     activeBattleSession = fallback;
     renderBattleArena();
+    if (previousTurnUid && fallback.currentTurnUid && previousTurnUid !== fallback.currentTurnUid) {
+      animateBattleTurnTransition();
+    }
   }, 3000);
 }
 
 function getActiveBattleOpponentUid() {
   if (!activeBattleSession || !currentUserId) return '';
   return (activeBattleSession.players || []).find((uid) => uid !== currentUserId) || '';
+}
+
+function animateBattleTurnTransition() {
+  const battleArenaCard = document.querySelector('.battle-arena-card');
+  if (!battleArenaCard) return;
+  battleArenaCard.classList.remove('turn-transition-active');
+  void battleArenaCard.offsetWidth;
+  battleArenaCard.classList.add('turn-transition-active');
 }
 
 function renderBattleArena() {

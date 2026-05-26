@@ -1720,3 +1720,14 @@ body::before {
     grid-template-columns: 1fr;
   }
 }
+
+
+.battle-arena-card.turn-transition-active {
+  animation: turnTransitionPulse 0.55s ease;
+}
+
+@keyframes turnTransitionPulse {
+  0% { filter: brightness(0.85); transform: scale(0.998); }
+  45% { filter: brightness(1.08); transform: scale(1); }
+  100% { filter: brightness(1); transform: scale(1); }
+}
