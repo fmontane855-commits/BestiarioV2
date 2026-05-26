@@ -77,6 +77,11 @@ const battleExperienceOutcomeCloseButton = document.querySelector('#battle-exper
 const battleHistoryList = document.querySelector('#battle-history-list');
 const historyTypesList = document.querySelector('#history-types-list');
 const historyClansList = document.querySelector('#history-clans-list');
+const personajesGallery = document.querySelector('#personajes-gallery');
+const artefactosGallery = document.querySelector('#artefactos-gallery');
+const camposGallery = document.querySelector('#campos-gallery');
+const addArtefactButton = document.querySelector('#add-artefact-btn');
+const addCampoButton = document.querySelector('#add-campo-btn');
 
 const characterTypes = [
   { type: 'Brujas', clans: ['Luna Carmesí', 'Hijas del Caldero', 'Las Espinas Negras', 'Coven Eclipse'] },
@@ -582,10 +587,26 @@ function renderCharacterCard(character) {
 }
 
 function renderGallery() {
-  const gallery = document.querySelector('.character-gallery');
-  gallery.innerHTML = characters.length
+  if (!personajesGallery) return;
+  personajesGallery.innerHTML = characters.length
     ? characters.map(renderCharacterCard).join('')
     : '<p class="empty-gallery">Todavía no hay personajes guardados.</p>';
+  renderArtefactosGallery();
+  renderCamposGallery();
+}
+
+function renderArtefactosGallery() {
+  if (!artefactosGallery) return;
+  artefactosGallery.innerHTML = characters.length
+    ? characters.map(renderCharacterCard).join('')
+    : '<p class="empty-gallery">Todavía no hay artefactos guardados.</p>';
+}
+
+function renderCamposGallery() {
+  if (!camposGallery) return;
+  camposGallery.innerHTML = characters.length
+    ? characters.map(renderCharacterCard).join('')
+    : '<p class="empty-gallery">Todavía no hay campos guardados.</p>';
 }
 
 function renderDeckBuilder() {
@@ -1866,7 +1887,7 @@ async function executeBotTurn(session) {
 function closeProfile() {
   activeProfileId = null;
   document.querySelector('.character-profile').classList.add('hidden');
-  document.querySelector('.character-gallery').classList.remove('hidden');
+  document.querySelector('#personajes-gallery').classList.remove('hidden');
   addCharacterButton.classList.remove('hidden');
 }
 
@@ -2135,7 +2156,7 @@ function renderProfile(character) {
     </section>
   `;
 
-  document.querySelector('.character-gallery').classList.add('hidden');
+  document.querySelector('#personajes-gallery').classList.add('hidden');
   document.querySelector('.character-creator').classList.add('hidden');
   addCharacterButton.classList.add('hidden');
   profile.classList.remove('hidden');
@@ -2490,7 +2511,7 @@ function createCharacterForm() {
           <p class="preview-note">Si cargas una imagen desde archivo, se usará esa imagen al guardar; si no, se usará la URL.</p>
         </aside>
       </div>
-      <section class="character-gallery" aria-label="Galería de personajes"></section>
+      <section id="personajes-gallery" class="character-gallery" aria-label="Galería de personajes"></section>
       <section class="character-profile hidden" aria-label="Perfil del personaje"></section>
     `,
   );
@@ -2518,7 +2539,7 @@ function createCharacterForm() {
 
   document.querySelector('.cancel-character-btn').addEventListener('click', closeForm);
   document.querySelector('.close-character-form').addEventListener('click', closeForm);
-  document.querySelector('.character-gallery').addEventListener('click', (event) => {
+  document.querySelector('#personajes-gallery').addEventListener('click', (event) => {
     const card = event.target.closest('.character-card');
     if (card) {
       openProfile(card.dataset.characterId);
@@ -2719,6 +2740,24 @@ addCharacterButton.textContent = 'Crear personaje';
 addCharacterButton.addEventListener('click', openForm);
 randomCharacterButton.addEventListener('click', createRandomCharacters);
 createCharacterForm();
+
+addArtefactButton?.addEventListener('click', () => {
+  alert('Próximamente podrás crear artefactos desde aquí.');
+});
+
+addCampoButton?.addEventListener('click', () => {
+  alert('Próximamente podrás crear campos desde aquí.');
+});
+
+artefactosGallery?.addEventListener('click', (event) => {
+  const card = event.target.closest('.character-card');
+  if (card) openProfile(card.dataset.characterId);
+});
+
+camposGallery?.addEventListener('click', (event) => {
+  const card = event.target.closest('.character-card');
+  if (card) openProfile(card.dataset.characterId);
+});
 
 historyTypesList?.addEventListener('click', async (event) => {
   const typeBtn = event.target.closest('[data-history-type-id]');
