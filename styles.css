@@ -1731,3 +1731,5 @@ body::before {
   45% { filter: brightness(1.08); transform: scale(1); }
   100% { filter: brightness(1); transform: scale(1); }
 }
+
+.section-actions { margin-bottom: 1rem; }
