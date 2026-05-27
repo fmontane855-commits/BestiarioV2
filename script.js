@@ -381,15 +381,16 @@ function getCharacterAttributePoints(character) {
 }
 
 function buildDownloadPayload() {
-  const artifacts = getCurrentArtifacts();
   return {
     generatedAt: getTimestamp(),
     generatedByUserId: currentUserId || null,
     personajes: characters.map((character) => ({
-      foto: character.image || '',
-      nombre: character.name || '',
-      tipo: character.type || '',
-      puntosDeAtributo: {
+      datos: {
+        foto: character.image || '',
+        tipo: character.type || '',
+      },
+      nombres: character.name || '',
+      atributos: {
         total: getCharacterAttributePoints(character),
         fuerza: getCharacterStatValue(character, 'strength'),
         velocidad: getCharacterStatValue(character, 'speed'),
@@ -397,26 +398,6 @@ function buildDownloadPayload() {
         inteligencia: getCharacterStatValue(character, 'intelligence'),
       },
       historia: character.story || '',
-    })),
-    campos: campos.map((campo) => ({
-      foto: campo.image || '',
-      nombre: campo.name || '',
-      tipo: campo.type || '',
-      puntosDeAtributo: {
-        total: getCharacterAttributePoints(campo),
-        fuerza: getCharacterStatValue(campo, 'strength'),
-        velocidad: getCharacterStatValue(campo, 'speed'),
-        magia: getCharacterStatValue(campo, 'magic'),
-        inteligencia: getCharacterStatValue(campo, 'intelligence'),
-      },
-      historia: campo.story || '',
-    })),
-    artefactos: artifacts.map((artifact) => ({
-      foto: artifact.image || '',
-      nombre: artifact.name || '',
-      tipo: artifact.type || '',
-      puntosDeAtributo: artifact.effects || [],
-      historia: artifact.description || '',
     })),
   };
 }
@@ -427,9 +408,8 @@ function downloadAllData() {
   const blob = new Blob([data], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   link.href = url;
-  link.download = `cronicas-del-reino-${stamp}.json`;
+  link.download = 'nombres.json';
   document.body.append(link);
   link.click();
   link.remove();
