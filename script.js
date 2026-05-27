@@ -438,6 +438,14 @@ function downloadAllData() {
 
 downloadAllButton?.addEventListener('click', downloadAllData);
 
+function ensurePersonajesGalleryVisible() {
+  document.querySelector('.character-profile')?.classList.add('hidden');
+  document.querySelector('#personajes-gallery')?.classList.remove('hidden');
+  document.querySelector('.character-creator')?.classList.add('hidden');
+  addCharacterButton?.classList.remove('hidden');
+  activeProfileId = null;
+}
+
 buttons.forEach((button) => {
   button.addEventListener('click', () => {
     const targetId = button.dataset.target;
@@ -448,6 +456,10 @@ buttons.forEach((button) => {
     panels.forEach((panel) => {
       panel.classList.toggle('active', panel.id === targetId);
     });
+
+    if (targetId === 'personajes') {
+      ensurePersonajesGalleryVisible();
+    }
   });
 });
 
